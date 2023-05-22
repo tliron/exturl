@@ -16,7 +16,7 @@ import (
 
 type URL interface {
 	String() string
-	Format() string // yaml|json|xml
+	Format() string // yaml, json, xml etc.
 	Origin() URL    // base dir, is not necessarily a valid URL
 	Relative(path string) URL
 	Key() string // for maps
@@ -31,10 +31,7 @@ func NewURL(url string, context *Context) (URL, error) {
 		}
 	}
 
-	neturl, err := neturlpkg.ParseRequestURI(url)
-	if err != nil {
-		return nil, fmt.Errorf("unsupported URL format: %s", url)
-	} else {
+	if neturl, err := neturlpkg.ParseRequestURI(url); err == nil {
 		switch neturl.Scheme {
 		case "file":
 			return NewFileURL(neturl.Path, context), nil
@@ -73,11 +70,7 @@ func NewValidURL(url string, origins []URL, context *Context) (URL, error) {
 		}
 	}
 
-	neturl, err := neturlpkg.ParseRequestURI(url)
-	if err != nil {
-		// Malformed URL, so it might be a relative path
-		return newValidRelativeURL(url, origins, context, false)
-	} else {
+	if neturl, err := neturlpkg.ParseRequestURI(url); err == nil {
 		switch neturl.Scheme {
 		case "file":
 			// They're rarely used, but relative "file:" URLs are possible
@@ -105,6 +98,9 @@ func NewValidURL(url string, origins []URL, context *Context) (URL, error) {
 		case "":
 			return newValidRelativeURL(url, origins, context, false)
 		}
+	} else {
+		// Malformed URL, so it might be a relative path
+		return newValidRelativeURL(url, origins, context, false)
 	}
 
 	return nil, fmt.Errorf("unsupported URL format: %s", url)

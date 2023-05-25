@@ -1,9 +1,10 @@
 package exturl
 
 import (
+	contextpkg "context"
 	"fmt"
 	"io"
-	"net/url"
+	neturlpkg "net/url"
 	"path"
 
 	"github.com/google/go-containerregistry/pkg/authn"
@@ -17,32 +18,32 @@ import (
 //
 
 type DockerURL struct {
-	URL *url.URL
+	URL *neturlpkg.URL
 
-	string_ string
-	context *Context
+	string_    string
+	urlContext *Context
 }
 
-func NewDockerURL(neturl *url.URL, context *Context) *DockerURL {
-	if context == nil {
-		context = NewContext()
+func (self *Context) NewDockerURL(neturl *neturlpkg.URL) *DockerURL {
+	if self == nil {
+		self = NewContext()
 	}
 
 	return &DockerURL{
-		URL:     neturl,
-		string_: neturl.String(),
-		context: context,
+		URL:        neturl,
+		string_:    neturl.String(),
+		urlContext: self,
 	}
 }
 
-func NewValidDockerURL(neturl *url.URL, context *Context) (*DockerURL, error) {
+func (self *Context) NewValidDockerURL(neturl *neturlpkg.URL) (*DockerURL, error) {
 	if (neturl.Scheme != "docker") && (neturl.Scheme != "") {
 		return nil, fmt.Errorf("not a docker URL: %s", neturl.String())
 	}
 
 	// TODO
 
-	return NewDockerURL(neturl, context), nil
+	return self.NewDockerURL(neturl), nil
 }
 
 // URL interface
@@ -74,8 +75,8 @@ func (self *DockerURL) Origin() URL {
 
 // URL interface
 func (self *DockerURL) Relative(path string) URL {
-	if neturl, err := url.Parse(path); err == nil {
-		return NewDockerURL(self.URL.ResolveReference(neturl), self.context)
+	if neturl, err := neturlpkg.Parse(path); err == nil {
+		return self.urlContext.NewDockerURL(self.URL.ResolveReference(neturl))
 	} else {
 		return nil
 	}
@@ -87,7 +88,7 @@ func (self *DockerURL) Key() string {
 }
 
 // URL interface
-func (self *DockerURL) Open() (io.ReadCloser, error) {
+func (self *DockerURL) Open(context contextpkg.Context) (io.ReadCloser, error) {
 	pipeReader, pipeWriter := io.Pipe()
 
 	go func() {
@@ -103,7 +104,7 @@ func (self *DockerURL) Open() (io.ReadCloser, error) {
 
 // URL interface
 func (self *DockerURL) Context() *Context {
-	return self.context
+	return self.urlContext
 }
 
 func (self *DockerURL) WriteTarball(writer io.Writer) error {
@@ -141,11 +142,11 @@ func (self *DockerURL) WriteLayer(writer io.Writer) error {
 func (self *DockerURL) RemoteOptions() []remote.Option {
 	var options []remote.Option
 
-	if httpRoundTripper := self.context.GetHTTPRoundTripper(self.URL.Host); httpRoundTripper != nil {
+	if httpRoundTripper := self.urlContext.GetHTTPRoundTripper(self.URL.Host); httpRoundTripper != nil {
 		options = append(options, remote.WithTransport(httpRoundTripper))
 	}
 
-	if credentials := self.context.GetCredentials(self.URL.Host); credentials != nil {
+	if credentials := self.urlContext.GetCredentials(self.URL.Host); credentials != nil {
 		authenticator := authn.FromConfig(authn.AuthConfig{
 			Username:      credentials.Username,
 			Password:      credentials.Password,

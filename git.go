@@ -1,9 +1,10 @@
 package exturl
 
 import (
+	contextpkg "context"
 	"fmt"
 	"io"
-	"net/url"
+	neturlpkg "net/url"
 	"os"
 	pathpkg "path"
 	"path/filepath"
@@ -27,44 +28,44 @@ type GitURL struct {
 	Username      string
 	Password      string
 
-	clonePath string
-	context   *Context
+	clonePath  string
+	urlContext *Context
 }
 
-func NewGitURL(path string, repositoryUrl string, context *Context) *GitURL {
+func (self *Context) NewGitURL(path string, repositoryUrl string) *GitURL {
 	// Must be absolute
 	path = strings.TrimLeft(path, "/")
 
-	var self = GitURL{
-		Path:    path,
-		context: context,
+	var gitUrl = GitURL{
+		Path:       path,
+		urlContext: self,
 	}
 
-	if neturl, err := url.Parse(repositoryUrl); err == nil {
+	if neturl, err := neturlpkg.Parse(repositoryUrl); err == nil {
 		if neturl.User != nil {
-			self.Username = neturl.User.Username()
+			gitUrl.Username = neturl.User.Username()
 			if password, ok := neturl.User.Password(); ok {
-				self.Password = password
+				gitUrl.Password = password
 			}
 			// Don't store user info
 			neturl.User = nil
 		}
-		self.Reference = neturl.Fragment
+		gitUrl.Reference = neturl.Fragment
 		neturl.Fragment = ""
-		self.RepositoryURL = neturl.String()
+		gitUrl.RepositoryURL = neturl.String()
 	} else {
-		self.RepositoryURL = repositoryUrl
+		gitUrl.RepositoryURL = repositoryUrl
 	}
 
-	return &self
+	return &gitUrl
 }
 
-func NewValidGitURL(path string, repositoryUrl string, context *Context) (*GitURL, error) {
-	self := NewGitURL(path, repositoryUrl, context)
-	if _, err := self.OpenRepository(); err == nil {
-		path := filepath.Join(self.clonePath, self.Path)
+func (self *Context) NewValidGitURL(path string, repositoryUrl string) (*GitURL, error) {
+	gitUrl := self.NewGitURL(path, repositoryUrl)
+	if _, err := gitUrl.OpenRepository(); err == nil {
+		path := filepath.Join(gitUrl.clonePath, gitUrl.Path)
 		if _, err := os.Stat(path); err == nil {
-			return self, nil
+			return gitUrl, nil
 		} else {
 			return nil, err
 		}
@@ -73,12 +74,12 @@ func NewValidGitURL(path string, repositoryUrl string, context *Context) (*GitUR
 	}
 }
 
-func NewValidRelativeGitURL(path string, origin *GitURL) (*GitURL, error) {
-	self := origin.Relative(path).(*GitURL)
-	if _, err := self.OpenRepository(); err == nil {
-		path_ := filepath.Join(self.clonePath, self.Path)
+func (self *GitURL) NewValidRelativeGitURL(path string) (*GitURL, error) {
+	gitUrl := self.Relative(path).(*GitURL)
+	if _, err := gitUrl.OpenRepository(); err == nil {
+		path_ := filepath.Join(gitUrl.clonePath, gitUrl.Path)
 		if _, err := os.Stat(path_); err == nil {
-			return self, nil
+			return gitUrl, nil
 		} else {
 			return nil, err
 		}
@@ -87,17 +88,17 @@ func NewValidRelativeGitURL(path string, origin *GitURL) (*GitURL, error) {
 	}
 }
 
-func ParseGitURL(url string, context *Context) (*GitURL, error) {
+func (self *Context) ParseGitURL(url string) (*GitURL, error) {
 	if repositoryUrl, path, err := parseGitURL(url); err == nil {
-		return NewGitURL(path, repositoryUrl, context), nil
+		return self.NewGitURL(path, repositoryUrl), nil
 	} else {
 		return nil, err
 	}
 }
 
-func ParseValidGitURL(url string, context *Context) (*GitURL, error) {
+func (self *Context) ParseValidGitURL(url string) (*GitURL, error) {
 	if repositoryUrl, path, err := parseGitURL(url); err == nil {
-		return NewValidGitURL(path, repositoryUrl, context)
+		return self.NewValidGitURL(path, repositoryUrl)
 	} else {
 		return nil, err
 	}
@@ -125,7 +126,7 @@ func (self *GitURL) Origin() URL {
 		Path:          path,
 		RepositoryURL: self.RepositoryURL,
 		clonePath:     self.clonePath,
-		context:       self.context,
+		urlContext:    self.urlContext,
 	}
 }
 
@@ -135,7 +136,7 @@ func (self *GitURL) Relative(path string) URL {
 		Path:          pathpkg.Join(self.Path, path),
 		RepositoryURL: self.RepositoryURL,
 		clonePath:     self.clonePath,
-		context:       self.context,
+		urlContext:    self.urlContext,
 	}
 }
 
@@ -145,10 +146,14 @@ func (self *GitURL) Key() string {
 }
 
 // URL interface
-func (self *GitURL) Open() (io.ReadCloser, error) {
+func (self *GitURL) Open(context contextpkg.Context) (io.ReadCloser, error) {
 	if _, err := self.OpenRepository(); err == nil {
 		path := filepath.Join(self.clonePath, self.Path)
-		return os.Open(path)
+		if reader, err := os.Open(path); err == nil {
+			return reader, nil
+		} else {
+			return nil, err
+		}
 	} else {
 		return nil, err
 	}
@@ -156,7 +161,7 @@ func (self *GitURL) Open() (io.ReadCloser, error) {
 
 // URL interface
 func (self *GitURL) Context() *Context {
-	return self.context
+	return self.urlContext
 }
 
 func (self *GitURL) OpenRepository() (*git.Repository, error) {
@@ -166,12 +171,12 @@ func (self *GitURL) OpenRepository() (*git.Repository, error) {
 		key := self.Key()
 
 		// Note: this will lock for the entire clone duration!
-		self.context.lock.Lock()
-		defer self.context.lock.Unlock()
+		self.urlContext.lock.Lock()
+		defer self.urlContext.lock.Unlock()
 
-		if self.context.dirs != nil {
+		if self.urlContext.dirs != nil {
 			// Already cloned?
-			if clonePath, ok := self.context.dirs[key]; ok {
+			if clonePath, ok := self.urlContext.dirs[key]; ok {
 				self.clonePath = clonePath
 				return self.openRepository(false)
 			}
@@ -179,10 +184,10 @@ func (self *GitURL) OpenRepository() (*git.Repository, error) {
 
 		temporaryPathPattern := fmt.Sprintf("kutil-%s-*", util.SanitizeFilename(key))
 		if clonePath, err := os.MkdirTemp("", temporaryPathPattern); err == nil {
-			if self.context.dirs == nil {
-				self.context.dirs = make(map[string]string)
+			if self.urlContext.dirs == nil {
+				self.urlContext.dirs = make(map[string]string)
 			}
-			self.context.dirs[key] = clonePath
+			self.urlContext.dirs[key] = clonePath
 
 			// Clone
 			fmt.Println(self.RepositoryURL)

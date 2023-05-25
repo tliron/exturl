@@ -2,6 +2,7 @@ package exturl
 
 import (
 	"archive/zip"
+	contextpkg "context"
 	"fmt"
 	"io"
 	"os"
@@ -32,9 +33,9 @@ func NewZipURL(path string, archiveUrl URL) *ZipURL {
 	}
 }
 
-func NewValidZipURL(path string, archiveUrl URL) (*ZipURL, error) {
+func NewValidZipURL(context contextpkg.Context, path string, archiveUrl URL) (*ZipURL, error) {
 	self := NewZipURL(path, archiveUrl)
-	if zipReader, err := self.OpenArchive(); err == nil {
+	if zipReader, err := self.OpenArchive(context); err == nil {
 		defer zipReader.Close()
 
 		for _, file := range zipReader.ZipReader.File {
@@ -49,26 +50,26 @@ func NewValidZipURL(path string, archiveUrl URL) (*ZipURL, error) {
 	}
 }
 
-func NewValidRelativeZipURL(path string, origin *ZipURL) (*ZipURL, error) {
-	self := origin.Relative(path).(*ZipURL)
-	if zipReader, err := self.OpenArchive(); err == nil {
+func (self *ZipURL) NewValidRelativeZipURL(context contextpkg.Context, path string) (*ZipURL, error) {
+	zipUrl := self.Relative(path).(*ZipURL)
+	if zipReader, err := zipUrl.OpenArchive(context); err == nil {
 		defer zipReader.Close()
 
 		for _, file := range zipReader.ZipReader.File {
-			if self.Path == file.Name {
-				return self, nil
+			if zipUrl.Path == file.Name {
+				return zipUrl, nil
 			}
 		}
 
-		return nil, NewNotFoundf("path %q not found in zip: %s", self.Path, self.ArchiveURL.String())
+		return nil, NewNotFoundf("path %q not found in zip: %s", zipUrl.Path, zipUrl.ArchiveURL.String())
 	} else {
 		return nil, err
 	}
 }
 
-func ParseZipURL(url string, context *Context) (*ZipURL, error) {
+func (self *Context) ParseZipURL(url string) (*ZipURL, error) {
 	if archiveUrl, path, err := parseZipURL(url); err == nil {
-		if archiveUrl_, err := NewURL(archiveUrl, context); err == nil {
+		if archiveUrl_, err := self.NewURL(archiveUrl); err == nil {
 			return NewZipURL(path, archiveUrl_), nil
 		} else {
 			return nil, err
@@ -78,10 +79,10 @@ func ParseZipURL(url string, context *Context) (*ZipURL, error) {
 	}
 }
 
-func ParseValidZipURL(url string, context *Context) (*ZipURL, error) {
+func (self *Context) ParseValidZipURL(context contextpkg.Context, url string) (*ZipURL, error) {
 	if archiveUrl, path, err := parseZipURL(url); err == nil {
-		if archiveUrl_, err := NewURL(archiveUrl, context); err == nil {
-			return NewValidZipURL(path, archiveUrl_)
+		if archiveUrl_, err := self.NewURL(archiveUrl); err == nil {
+			return NewValidZipURL(context, path, archiveUrl_)
 		} else {
 			return nil, err
 		}
@@ -128,8 +129,8 @@ func (self *ZipURL) Key() string {
 }
 
 // URL interface
-func (self *ZipURL) Open() (io.ReadCloser, error) {
-	if zipReader, err := self.OpenArchive(); err == nil {
+func (self *ZipURL) Open(context contextpkg.Context) (io.ReadCloser, error) {
+	if zipReader, err := self.OpenArchive(context); err == nil {
 		if zipEntryReader, err := zipReader.Open(self.Path); err == nil {
 			if zipEntryReader != nil {
 				return zipEntryReader, nil
@@ -151,8 +152,8 @@ func (self *ZipURL) Context() *Context {
 	return self.ArchiveURL.Context()
 }
 
-func (self *ZipURL) OpenArchive() (*ZipReader, error) {
-	if file, err := self.ArchiveURL.Context().OpenFile(self.ArchiveURL); err == nil {
+func (self *ZipURL) OpenArchive(context contextpkg.Context) (*ZipReader, error) {
+	if file, err := self.ArchiveURL.Context().OpenFile(context, self.ArchiveURL); err == nil {
 		return OpenZipFromFile(file)
 	} else {
 		return nil, err

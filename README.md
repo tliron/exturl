@@ -29,7 +29,7 @@ Use `url.Relative()`.
 
 You can also ensure that a URL is valid (remote location is available) before attempting to
 read from it (which may trigger a download) or passing it to other parts of your program. To
-do so, use `exturl.NewValidURL()` instead of `exturl.NewURL()`.
+do so, use `NewValidURL()` instead of `NewURL()`.
 
 Also supported are URLs for in-memory data using a special `internal:` scheme. This allows you
 to have a unified API for accessing data, whether it's available externally or created
@@ -40,15 +40,16 @@ Example
 
 ```go
 import (
+    "context"
     "github.com/tliron/exturl"
 )
 
 func ReadAll(url string) ([]byte, error) {
-    context := exturl.NewContext()
-    defer context.Release()
+    urlContext := exturl.NewContext()
+    defer urlContext.Release()
 
-    if url_, err = exturl.NewURL(url, context); err == nil {
-        if reader, err := url_.Open(); err == nil {
+    if url_, err = urlContext.NewURL(url); err == nil {
+        if reader, err := url_.Open(context.TODO()); err == nil {
             defer reader.Close()
             return io.ReadAll(reader)
         } else {
@@ -90,5 +91,5 @@ Docker (OCI) registries. Uses [go-containerregistry](https://github.com/google/g
 
 ### `internal:`
 
-Supported APIs are `exturl.RegisterInternalURL()`, `exturl.DeregisterInternalURL()`,
-`exturl.UpdateInternalURL()`, `exturl.ReadToInternalURL()`, `exturl.ReadToInternalURLFromStdin()`.
+Supported APIs are `RegisterInternalURL()`, `DeregisterInternalURL()`,
+`UpdateInternalURL()`, `ReadToInternalURL()`, `ReadToInternalURLFromStdin()`.

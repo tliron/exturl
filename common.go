@@ -1,35 +1,36 @@
 package exturl
 
 import (
+	contextpkg "context"
 	"io"
-	neturl "net/url"
+	neturlpkg "net/url"
 	"os"
 
 	"github.com/tliron/commonlog"
-	"github.com/tliron/go-ard"
 	"github.com/tliron/kutil/util"
 )
 
 var log = commonlog.GetLogger("exturl")
 
-func ToNetURL(url URL) (*neturl.URL, error) {
-	return neturl.ParseRequestURI(url.String())
+func ToNetURL(url URL) (*neturlpkg.URL, error) {
+	return neturlpkg.ParseRequestURI(url.String())
 }
 
 func GetPath(url URL) (string, error) {
 	if url_, err := ToNetURL(url); err == nil {
 		if url_.Path != "" {
-			return neturl.PathUnescape(url_.Path)
+			return neturlpkg.PathUnescape(url_.Path)
 		} else {
-			return neturl.PathUnescape(url_.Opaque)
+			return neturlpkg.PathUnescape(url_.Opaque)
 		}
 	} else {
 		return "", err
 	}
 }
 
-func ReadBytes(url URL) ([]byte, error) {
-	if reader, err := url.Open(); err == nil {
+func ReadBytes(context contextpkg.Context, url URL) ([]byte, error) {
+	if reader, err := url.Open(context); err == nil {
+		reader = util.NewContextualReadCloser(context, reader)
 		defer reader.Close()
 		return io.ReadAll(reader)
 	} else {
@@ -37,25 +38,17 @@ func ReadBytes(url URL) ([]byte, error) {
 	}
 }
 
-func ReadString(url URL) (string, error) {
-	if bytes, err := ReadBytes(url); err == nil {
+func ReadString(context contextpkg.Context, url URL) (string, error) {
+	if bytes, err := ReadBytes(context, url); err == nil {
 		return util.BytesToString(bytes), nil
 	} else {
 		return "", err
 	}
 }
 
-func ReadARD(url URL, locate bool) (ard.Value, ard.Locator, error) {
-	if reader, err := url.Open(); err == nil {
-		defer reader.Close()
-		return ard.Read(reader, url.Format(), locate)
-	} else {
-		return nil, nil, err
-	}
-}
-
-func Size(url URL) (int64, error) {
-	if reader, err := url.Open(); err == nil {
+func Size(context contextpkg.Context, url URL) (int64, error) {
+	if reader, err := url.Open(context); err == nil {
+		reader = util.NewContextualReadCloser(context, reader)
 		defer reader.Close()
 		return util.ReaderSize(reader)
 	} else {
@@ -63,9 +56,10 @@ func Size(url URL) (int64, error) {
 	}
 }
 
-func DownloadTo(url URL, path string) error {
+func DownloadTo(context contextpkg.Context, url URL, path string) error {
 	if writer, err := os.Create(path); err == nil {
-		if reader, err := url.Open(); err == nil {
+		if reader, err := url.Open(context); err == nil {
+			reader = util.NewContextualReadCloser(context, reader)
 			defer reader.Close()
 			log.Infof("downloading from %q to file %q", url.String(), path)
 			if _, err = io.Copy(writer, reader); err == nil {
@@ -82,10 +76,11 @@ func DownloadTo(url URL, path string) error {
 	}
 }
 
-func Download(url URL, temporaryPathPattern string) (*os.File, error) {
+func Download(context contextpkg.Context, url URL, temporaryPathPattern string) (*os.File, error) {
 	if file, err := os.CreateTemp("", temporaryPathPattern); err == nil {
 		path := file.Name()
-		if reader, err := url.Open(); err == nil {
+		if reader, err := url.Open(context); err == nil {
+			reader = util.NewContextualReadCloser(context, reader)
 			defer reader.Close()
 			log.Infof("downloading from %q to temporary file %q", url.String(), path)
 			if _, err = io.Copy(file, reader); err == nil {

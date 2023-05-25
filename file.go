@@ -1,6 +1,7 @@
 package exturl
 
 import (
+	contextpkg "context"
 	"fmt"
 	"io"
 	"os"
@@ -15,21 +16,21 @@ import (
 type FileURL struct {
 	Path string
 
-	context *Context
+	urlContext *Context
 }
 
-func NewFileURL(path string, context *Context) *FileURL {
-	if context == nil {
-		context = NewContext()
+func (self *Context) NewFileURL(path string) *FileURL {
+	if self == nil {
+		self = NewContext()
 	}
 
 	return &FileURL{
-		Path:    path,
-		context: context,
+		Path:       path,
+		urlContext: self,
 	}
 }
 
-func NewValidFileURL(path string, context *Context) (*FileURL, error) {
+func (self *Context) NewValidFileURL(path string) (*FileURL, error) {
 	isDir := strings.HasSuffix(path, "/")
 
 	if filepath.IsAbs(path) {
@@ -53,16 +54,16 @@ func NewValidFileURL(path string, context *Context) (*FileURL, error) {
 		return nil, err
 	}
 
-	return NewFileURL(path, context), nil
+	return self.NewFileURL(path), nil
 }
 
-func NewValidRelativeFileURL(path string, origin *FileURL) (*FileURL, error) {
+func (self *FileURL) NewValidRelativeFileURL(path string) (*FileURL, error) {
 	isDir := strings.HasSuffix(path, "/")
-	path = filepath.Join(origin.Path, path)
+	path = filepath.Join(self.Path, path)
 	if isDir {
 		path += "/"
 	}
-	return NewValidFileURL(path, origin.context)
+	return self.urlContext.NewValidFileURL(path)
 }
 
 // URL interface
@@ -84,14 +85,14 @@ func (self *FileURL) Origin() URL {
 	}
 
 	return &FileURL{
-		Path:    path,
-		context: self.context,
+		Path:       path,
+		urlContext: self.urlContext,
 	}
 }
 
 // URL interface
 func (self *FileURL) Relative(path string) URL {
-	return NewFileURL(filepath.Join(self.Path, path), self.context)
+	return self.urlContext.NewFileURL(filepath.Join(self.Path, path))
 }
 
 // URL interface
@@ -100,7 +101,7 @@ func (self *FileURL) Key() string {
 }
 
 // URL interface
-func (self *FileURL) Open() (io.ReadCloser, error) {
+func (self *FileURL) Open(context contextpkg.Context) (io.ReadCloser, error) {
 	if reader, err := os.Open(self.Path); err == nil {
 		return reader, nil
 	} else {
@@ -110,7 +111,7 @@ func (self *FileURL) Open() (io.ReadCloser, error) {
 
 // URL interface
 func (self *FileURL) Context() *Context {
-	return self.context
+	return self.urlContext
 }
 
 func isValidFile(path string) bool {

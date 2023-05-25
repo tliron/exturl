@@ -3,6 +3,7 @@ package exturl
 import (
 	"archive/tar"
 	"compress/gzip"
+	contextpkg "context"
 	"fmt"
 	"io"
 	"os"
@@ -52,9 +53,9 @@ func NewTarballURL(path string, archiveUrl URL, archiveFormat string) *TarballUR
 	}
 }
 
-func NewValidTarballURL(path string, archiveUrl URL, archiveFormat string) (*TarballURL, error) {
+func NewValidTarballURL(context contextpkg.Context, path string, archiveUrl URL, archiveFormat string) (*TarballURL, error) {
 	self := NewTarballURL(path, archiveUrl, archiveFormat)
-	if tarballReader, err := self.OpenArchive(); err == nil {
+	if tarballReader, err := self.OpenArchive(context); err == nil {
 		defer tarballReader.Close()
 
 		for {
@@ -75,15 +76,15 @@ func NewValidTarballURL(path string, archiveUrl URL, archiveFormat string) (*Tar
 	}
 }
 
-func NewValidRelativeTarballURL(path string, origin *TarballURL) (*TarballURL, error) {
-	self := origin.Relative(path).(*TarballURL)
-	if tarballReader, err := self.OpenArchive(); err == nil {
+func (self *TarballURL) NewValidRelativeTarballURL(context contextpkg.Context, path string) (*TarballURL, error) {
+	tarballUrl := self.Relative(path).(*TarballURL)
+	if tarballReader, err := tarballUrl.OpenArchive(context); err == nil {
 		defer tarballReader.Close()
 
 		for {
 			if header, err := tarballReader.TarReader.Next(); err == nil {
-				if self.Path == fixTarballEntryPath(header.Name) {
-					return self, nil
+				if tarballUrl.Path == fixTarballEntryPath(header.Name) {
+					return tarballUrl, nil
 				}
 			} else if err == io.EOF {
 				break
@@ -92,15 +93,15 @@ func NewValidRelativeTarballURL(path string, origin *TarballURL) (*TarballURL, e
 			}
 		}
 
-		return nil, NewNotFoundf("path %q not found in tarball: %s", self.Path, self.ArchiveURL.String())
+		return nil, NewNotFoundf("path %q not found in tarball: %s", tarballUrl.Path, tarballUrl.ArchiveURL.String())
 	} else {
 		return nil, err
 	}
 }
 
-func ParseTarballURL(url string, context *Context) (*TarballURL, error) {
+func (self *Context) ParseTarballURL(url string) (*TarballURL, error) {
 	if archiveUrl, path, err := parseTarballURL(url); err == nil {
-		if archiveUrl_, err := NewURL(archiveUrl, context); err == nil {
+		if archiveUrl_, err := self.NewURL(archiveUrl); err == nil {
 			return NewTarballURL(path, archiveUrl_, ""), nil
 		} else {
 			return nil, err
@@ -110,10 +111,10 @@ func ParseTarballURL(url string, context *Context) (*TarballURL, error) {
 	}
 }
 
-func ParseValidTarballURL(url string, context *Context) (*TarballURL, error) {
+func (self *Context) ParseValidTarballURL(context contextpkg.Context, url string) (*TarballURL, error) {
 	if archiveUrl, path, err := parseTarballURL(url); err == nil {
-		if archiveUrl_, err := NewURL(archiveUrl, context); err == nil {
-			return NewValidTarballURL(path, archiveUrl_, "")
+		if archiveUrl_, err := self.NewURL(archiveUrl); err == nil {
+			return NewValidTarballURL(context, path, archiveUrl_, "")
 		} else {
 			return nil, err
 		}
@@ -162,8 +163,8 @@ func (self *TarballURL) Key() string {
 }
 
 // URL interface
-func (self *TarballURL) Open() (io.ReadCloser, error) {
-	if tarballReader, err := self.OpenArchive(); err == nil {
+func (self *TarballURL) Open(context contextpkg.Context) (io.ReadCloser, error) {
+	if tarballReader, err := self.OpenArchive(context); err == nil {
 		if tarballEntryReader, err := tarballReader.Open(self.Path); err == nil {
 			if tarballEntryReader != nil {
 				return tarballEntryReader, nil
@@ -185,12 +186,12 @@ func (self *TarballURL) Context() *Context {
 	return self.ArchiveURL.Context()
 }
 
-func (self *TarballURL) OpenArchive() (*TarballReader, error) {
+func (self *TarballURL) OpenArchive(context contextpkg.Context) (*TarballReader, error) {
 	if !IsValidTarballArchiveFormat(self.ArchiveFormat) {
 		return nil, fmt.Errorf("unsupported tarball archive format: %q", self.ArchiveFormat)
 	}
 
-	if archiveReader, err := self.ArchiveURL.Open(); err == nil {
+	if archiveReader, err := self.ArchiveURL.Open(context); err == nil {
 		switch self.ArchiveFormat {
 		case "tar.gz":
 			if gzipReader, err := gzip.NewReader(archiveReader); err == nil {

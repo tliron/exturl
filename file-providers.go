@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"archive/zip"
 	"compress/gzip"
+	contextpkg "context"
 	"io"
 	"io/fs"
 	"os"
@@ -17,7 +18,7 @@ import (
 //
 
 type FileProvider interface {
-	Open() (string, bool, io.Reader, error)
+	Open(context contextpkg.Context) (string, bool, io.Reader, error)
 	Close() error
 }
 
@@ -31,7 +32,7 @@ type FileProviders interface {
 }
 
 // `unpack` can be "tgz" or "zip"
-func NewFileProviders(url URL, unpack string) (FileProviders, error) {
+func NewFileProviders(context contextpkg.Context, url URL, unpack string) (FileProviders, error) {
 	var isFile bool
 	var isDir bool
 
@@ -49,13 +50,13 @@ func NewFileProviders(url URL, unpack string) (FileProviders, error) {
 	} else {
 		switch unpack {
 		case "tar":
-			return NewTarFileProviders(url)
+			return NewTarFileProviders(context, url)
 
 		case "tgz":
-			return NewTarGZipFileProviders(url)
+			return NewTarGZipFileProviders(context, url)
 
 		case "zip":
-			if path, err := url.Context().GetLocalPath(url); err == nil {
+			if path, err := url.Context().GetLocalPath(context, url); err == nil {
 				return NewZipFileProviders(path)
 			} else {
 				return nil, err
@@ -133,8 +134,8 @@ func NewDirFileProviders(path string) (FileProviders, error) {
 	return NewStaticFileProviders(sources...), nil
 }
 
-// FileReader interface
-func (self *FileFileProvider) Open() (string, bool, io.Reader, error) {
+// FileProvider interface
+func (self *FileFileProvider) Open(context contextpkg.Context) (string, bool, io.Reader, error) {
 	if stat, err := os.Stat(self.localPath); err == nil {
 		if self.file, err = os.Open(self.localPath); err == nil {
 			return self.providedPath, util.IsFileExecutable(stat.Mode()), self.file, nil
@@ -146,7 +147,7 @@ func (self *FileFileProvider) Open() (string, bool, io.Reader, error) {
 	}
 }
 
-// FileReader interface
+// FileProvider interface
 func (self *FileFileProvider) Close() error {
 	return self.file.Close()
 }
@@ -167,10 +168,10 @@ func NewURLFileProvider(url URL) *URLFileProvider {
 	}
 }
 
-// FileReader interface
-func (self *URLFileProvider) Open() (string, bool, io.Reader, error) {
+// FileProvider interface
+func (self *URLFileProvider) Open(context contextpkg.Context) (string, bool, io.Reader, error) {
 	var err error
-	if self.reader, err = self.url.Open(); err == nil {
+	if self.reader, err = self.url.Open(context); err == nil {
 		if path, err := GetPath(self.url); err == nil {
 			return filepath.Base(path), false, self.reader, nil
 		} else {
@@ -181,7 +182,7 @@ func (self *URLFileProvider) Open() (string, bool, io.Reader, error) {
 	}
 }
 
-// FileReader interface
+// FileProvider interface
 func (self *URLFileProvider) Close() error {
 	return self.reader.Close()
 }
@@ -195,19 +196,19 @@ type TarFileProvider struct {
 	tarReader *tar.Reader
 }
 
-func NewTarFileReader(header *tar.Header, tarReader *tar.Reader) *TarFileProvider {
+func NewTarFileProvider(header *tar.Header, tarReader *tar.Reader) *TarFileProvider {
 	return &TarFileProvider{
 		header:    header,
 		tarReader: tarReader,
 	}
 }
 
-// FileReader interface
-func (self *TarFileProvider) Open() (string, bool, io.Reader, error) {
+// FileProvider interface
+func (self *TarFileProvider) Open(context contextpkg.Context) (string, bool, io.Reader, error) {
 	return self.header.Name, util.IsFileExecutable(fs.FileMode(self.header.Mode)), self.tarReader, nil
 }
 
-// FileReader interface
+// FileProvider interface
 func (self *TarFileProvider) Close() error {
 	return nil
 }
@@ -221,11 +222,11 @@ type TarFileProviders struct {
 	tarReader *tar.Reader
 }
 
-func NewTarFileProviders(url URL) (*TarFileProviders, error) {
+func NewTarFileProviders(context contextpkg.Context, url URL) (*TarFileProviders, error) {
 	var self TarFileProviders
 
 	var err error
-	if self.reader, err = url.Open(); err == nil {
+	if self.reader, err = url.Open(context); err == nil {
 		self.tarReader = tar.NewReader(self.reader)
 	} else {
 		return nil, err
@@ -246,7 +247,7 @@ func (self *TarFileProviders) Next() (FileProvider, error) {
 			}
 		}
 		if header.Typeflag == tar.TypeReg {
-			return NewTarFileReader(header, self.tarReader), nil
+			return NewTarFileProvider(header, self.tarReader), nil
 		}
 	}
 }
@@ -266,11 +267,11 @@ type TarGZipFileProviders struct {
 	tarReader  *tar.Reader
 }
 
-func NewTarGZipFileProviders(url URL) (*TarGZipFileProviders, error) {
+func NewTarGZipFileProviders(context contextpkg.Context, url URL) (*TarGZipFileProviders, error) {
 	var self TarGZipFileProviders
 
 	var err error
-	if self.reader, err = url.Open(); err == nil {
+	if self.reader, err = url.Open(context); err == nil {
 		if self.gzipReader, err = gzip.NewReader(self.reader); err == nil {
 			self.tarReader = tar.NewReader(self.gzipReader)
 		} else {
@@ -295,7 +296,7 @@ func (self *TarGZipFileProviders) Next() (FileProvider, error) {
 			}
 		}
 		if header.Typeflag == tar.TypeReg {
-			return NewTarFileReader(header, self.tarReader), nil
+			return NewTarFileProvider(header, self.tarReader), nil
 		}
 	}
 }
@@ -322,8 +323,8 @@ func NewZipFileProvider(file *zip.File) *ZipFileProvider {
 	}
 }
 
-// FileReader interface
-func (self *ZipFileProvider) Open() (string, bool, io.Reader, error) {
+// FileProvider interface
+func (self *ZipFileProvider) Open(context contextpkg.Context) (string, bool, io.Reader, error) {
 	var err error
 	if self.reader, err = self.file.Open(); err == nil {
 		return self.file.Name, util.IsFileExecutable(self.file.Mode()), self.reader, nil
@@ -332,7 +333,7 @@ func (self *ZipFileProvider) Open() (string, bool, io.Reader, error) {
 	}
 }
 
-// FileReader interface
+// FileProvider interface
 func (self *ZipFileProvider) Close() error {
 	return self.reader.Close()
 }

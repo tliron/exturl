@@ -1,6 +1,7 @@
 package exturl
 
 import (
+	contextpkg "context"
 	"errors"
 	"fmt"
 	"io"
@@ -20,96 +21,92 @@ type URL interface {
 	Origin() URL    // base dir, is not necessarily a valid URL
 	Relative(path string) URL
 	Key() string // for maps
-	Open() (io.ReadCloser, error)
+	Open(context contextpkg.Context) (io.ReadCloser, error)
 	Context() *Context
 }
 
-func NewURL(url string, context *Context) (URL, error) {
-	if context != nil {
-		if url_, ok := context.GetMapping(url); ok {
-			url = url_
-		}
+func (self *Context) NewURL(url string) (URL, error) {
+	if url_, ok := self.GetMapping(url); ok {
+		url = url_
 	}
 
 	if neturl, err := neturlpkg.ParseRequestURI(url); err == nil {
 		switch neturl.Scheme {
 		case "file":
-			return NewFileURL(neturl.Path, context), nil
+			return self.NewFileURL(neturl.Path), nil
 
 		case "http", "https":
 			// Go's "net/http" only handles "http:" and "https:"
-			return NewNetworkURL(neturl, context), nil
+			return self.NewNetworkURL(neturl), nil
 
 		case "tar":
-			return ParseTarballURL(url, context)
+			return self.ParseTarballURL(url)
 
 		case "zip":
-			return ParseZipURL(url, context)
+			return self.ParseZipURL(url)
 
 		case "git":
-			return ParseGitURL(url, context)
+			return self.ParseGitURL(url)
 
 		case "docker":
-			return NewDockerURL(neturl, context), nil
+			return self.NewDockerURL(neturl), nil
 
 		case "internal":
-			return NewInternalURL(url[9:], context), nil
+			return self.NewInternalURL(url[9:]), nil
 
 		case "":
-			return NewFileURL(url, context), nil
+			return self.NewFileURL(url), nil
 		}
 	}
 
 	return nil, fmt.Errorf("unsupported URL format: %s", url)
 }
 
-func NewValidURL(url string, origins []URL, context *Context) (URL, error) {
-	if context != nil {
-		if url_, ok := context.GetMapping(url); ok {
-			url = url_
-		}
+func (self *Context) NewValidURL(context contextpkg.Context, url string, origins []URL) (URL, error) {
+	if url_, ok := self.GetMapping(url); ok {
+		url = url_
 	}
 
 	if neturl, err := neturlpkg.ParseRequestURI(url); err == nil {
 		switch neturl.Scheme {
 		case "file":
 			// They're rarely used, but relative "file:" URLs are possible
-			return newValidRelativeURL(neturl.Path, origins, context, true)
+			return self.newValidRelativeURL(context, neturl.Path, origins, true)
 
 		case "http", "https":
 			// Go's "net/http" package only handles "http:" and "https:"
-			return NewValidNetworkURL(neturl, context)
+			return self.NewValidNetworkURL(neturl)
 
 		case "tar":
-			return ParseValidTarballURL(url, context)
+			return self.ParseValidTarballURL(context, url)
 
 		case "zip":
-			return ParseValidZipURL(url, context)
+			return self.ParseValidZipURL(context, url)
 
 		case "git":
-			return ParseValidGitURL(url, context)
+			return self.ParseValidGitURL(url)
 
 		case "docker":
-			return NewValidDockerURL(neturl, context)
+			return self.NewValidDockerURL(neturl)
 
 		case "internal":
-			return NewValidInternalURL(url[9:], context)
+			return self.NewValidInternalURL(url[9:])
 
 		case "":
-			return newValidRelativeURL(url, origins, context, false)
+			return self.newValidRelativeURL(context, url, origins, false)
 		}
 	} else {
 		// Malformed URL, so it might be a relative path
-		return newValidRelativeURL(url, origins, context, false)
+		return self.newValidRelativeURL(context, url, origins, false)
 	}
 
 	return nil, fmt.Errorf("unsupported URL format: %s", url)
 }
 
-func newValidRelativeURL(path string, origins []URL, context *Context, onlyFileURLs bool) (URL, error) {
+func (self *Context) newValidRelativeURL(context contextpkg.Context, path string, origins []URL, onlyFileURLs bool) (URL, error) {
 	// Absolute file path?
 	if pathpkg.IsAbs(path) {
-		url, err := NewValidFileURL(path, context)
+		url, err := self.NewValidFileURL(path)
 		if err != nil {
 			return nil, err
 		}
@@ -122,31 +119,31 @@ func newValidRelativeURL(path string, origins []URL, context *Context, onlyFileU
 
 			switch origin_ := origin.(type) {
 			case *FileURL:
-				url, err = NewValidRelativeFileURL(path, origin_)
+				url, err = origin_.NewValidRelativeFileURL(path)
 
 			case *NetworkURL:
 				if !onlyFileURLs {
-					url, err = NewValidRelativeNetworkURL(path, origin_)
+					url, err = origin_.NewValidRelativeNetworkURL(path)
 				}
 
 			case *TarballURL:
 				if !onlyFileURLs {
-					url, err = NewValidRelativeTarballURL(path, origin_)
+					url, err = origin_.NewValidRelativeTarballURL(context, path)
 				}
 
 			case *ZipURL:
 				if !onlyFileURLs {
-					url, err = NewValidRelativeZipURL(path, origin_)
+					url, err = origin_.NewValidRelativeZipURL(context, path)
 				}
 
 			case *GitURL:
 				if !onlyFileURLs {
-					url, err = NewValidRelativeGitURL(path, origin_)
+					url, err = origin_.NewValidRelativeGitURL(path)
 				}
 
 			case *InternalURL:
 				if !onlyFileURLs {
-					url, err = NewValidRelativeInternalURL(path, origin_)
+					url, err = origin_.NewValidRelativeInternalURL(path)
 				}
 			}
 
@@ -156,7 +153,7 @@ func newValidRelativeURL(path string, origins []URL, context *Context, onlyFileU
 		}
 
 		// Try file relative to current directory
-		url, err := NewValidFileURL(path, context)
+		url, err := self.NewValidFileURL(path)
 		if err != nil {
 			return nil, NewNotFoundf("URL not found: %s", path)
 		}

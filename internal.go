@@ -2,6 +2,7 @@ package exturl
 
 import (
 	"bytes"
+	contextpkg "context"
 	"fmt"
 	"io"
 	"os"
@@ -33,7 +34,7 @@ func UpdateInternalURL(path string, content any) {
 	internal.Store(path, util.ToBytes(content))
 }
 
-func ReadToInternalURL(path string, reader io.Reader, context *Context) (*InternalURL, error) {
+func (self *Context) ReadToInternalURL(path string, reader io.Reader) (*InternalURL, error) {
 	if closer, ok := reader.(io.Closer); ok {
 		defer closer.Close()
 	}
@@ -44,15 +45,15 @@ func ReadToInternalURL(path string, reader io.Reader, context *Context) (*Intern
 	} else {
 		return nil, err
 	}
-	return NewValidInternalURL(path, context)
+	return self.NewValidInternalURL(path)
 }
 
-func ReadToInternalURLFromStdin(format string, context *Context) (*InternalURL, error) {
+func (self *Context) ReadToInternalURLFromStdin(context contextpkg.Context, format string) (*InternalURL, error) {
 	path := fmt.Sprintf("<stdin:%s>", ksuid.New().String())
 	if format != "" {
 		path = fmt.Sprintf("%s.%s", path, format)
 	}
-	return ReadToInternalURL(path, os.Stdin, context)
+	return self.ReadToInternalURL(path, util.NewContextualReader(context, os.Stdin))
 }
 
 //
@@ -63,38 +64,34 @@ type InternalURL struct {
 	Path    string
 	Content []byte
 
-	context *Context
+	urlContext *Context
 }
 
-func NewInternalURL(path string, context *Context) *InternalURL {
-	if context == nil {
-		context = NewContext()
-	}
-
+func (self *Context) NewInternalURL(path string) *InternalURL {
 	return &InternalURL{
-		Path:    path,
-		context: context,
+		Path:       path,
+		urlContext: self,
 	}
 }
 
-func NewValidInternalURL(path string, context *Context) (*InternalURL, error) {
+func (self *Context) NewValidInternalURL(path string) (*InternalURL, error) {
 	if content, ok := internal.Load(path); ok {
-		if context == nil {
-			context = NewContext()
+		if self == nil {
+			self = NewContext()
 		}
 
 		return &InternalURL{
-			Path:    path,
-			Content: content.([]byte),
-			context: context,
+			Path:       path,
+			Content:    content.([]byte),
+			urlContext: self,
 		}, nil
 	} else {
 		return nil, NewNotFoundf("internal URL not found: %s", path)
 	}
 }
 
-func NewValidRelativeInternalURL(path string, origin *InternalURL) (*InternalURL, error) {
-	return NewValidInternalURL(pathpkg.Join(origin.Path, path), origin.context)
+func (self *InternalURL) NewValidRelativeInternalURL(path string) (*InternalURL, error) {
+	return self.urlContext.NewValidInternalURL(pathpkg.Join(self.Path, path))
 }
 
 func (self *InternalURL) SetContent(content any) {
@@ -120,14 +117,14 @@ func (self *InternalURL) Origin() URL {
 	}
 
 	return &InternalURL{
-		Path:    path,
-		context: self.context,
+		Path:       path,
+		urlContext: self.urlContext,
 	}
 }
 
 // URL interface
 func (self *InternalURL) Relative(path string) URL {
-	return NewInternalURL(pathpkg.Join(self.Path, path), self.context)
+	return self.urlContext.NewInternalURL(pathpkg.Join(self.Path, path))
 }
 
 // URL interface
@@ -136,11 +133,11 @@ func (self *InternalURL) Key() string {
 }
 
 // URL interface
-func (self *InternalURL) Open() (io.ReadCloser, error) {
+func (self *InternalURL) Open(context contextpkg.Context) (io.ReadCloser, error) {
 	return io.NopCloser(bytes.NewReader(self.Content)), nil
 }
 
 // URL interface
 func (self *InternalURL) Context() *Context {
-	return self.context
+	return self.urlContext
 }

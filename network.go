@@ -1,6 +1,7 @@
 package exturl
 
 import (
+	contextpkg "context"
 	"fmt"
 	"io"
 	"net/http"
@@ -17,35 +18,35 @@ import (
 type NetworkURL struct {
 	URL *neturlpkg.URL
 
-	string_ string
-	context *Context
+	string_    string
+	urlContext *Context
 }
 
-func NewNetworkURL(neturl *neturlpkg.URL, context *Context) *NetworkURL {
-	if context == nil {
-		context = NewContext()
+func (self *Context) NewNetworkURL(neturl *neturlpkg.URL) *NetworkURL {
+	if self == nil {
+		self = NewContext()
 	}
 
 	return &NetworkURL{
-		URL:     neturl,
-		string_: neturl.String(),
-		context: context,
+		URL:        neturl,
+		string_:    neturl.String(),
+		urlContext: self,
 	}
 }
 
-func NewValidNetworkURL(neturl *neturlpkg.URL, context *Context) (*NetworkURL, error) {
+func (self *Context) NewValidNetworkURL(neturl *neturlpkg.URL) (*NetworkURL, error) {
 	string_ := neturl.String()
 	if response, err := http.Head(string_); err == nil {
 		response.Body.Close()
 		if response.StatusCode == http.StatusOK {
-			if context == nil {
-				context = NewContext()
+			if self == nil {
+				self = NewContext()
 			}
 
 			return &NetworkURL{
-				URL:     neturl,
-				string_: string_,
-				context: context,
+				URL:        neturl,
+				string_:    string_,
+				urlContext: self,
 			}, nil
 		} else {
 			return nil, fmt.Errorf("HTTP status: %s", response.Status)
@@ -55,10 +56,10 @@ func NewValidNetworkURL(neturl *neturlpkg.URL, context *Context) (*NetworkURL, e
 	}
 }
 
-func NewValidRelativeNetworkURL(path string, origin *NetworkURL) (*NetworkURL, error) {
+func (self *NetworkURL) NewValidRelativeNetworkURL(path string) (*NetworkURL, error) {
 	if neturl, err := neturlpkg.Parse(path); err == nil {
-		neturl = origin.URL.ResolveReference(neturl)
-		return NewValidNetworkURL(neturl, origin.context)
+		neturl = self.URL.ResolveReference(neturl)
+		return self.urlContext.NewValidNetworkURL(neturl)
 	} else {
 		return nil, err
 	}
@@ -94,7 +95,7 @@ func (self *NetworkURL) Origin() URL {
 // URL interface
 func (self *NetworkURL) Relative(path string) URL {
 	if neturl, err := neturlpkg.Parse(path); err == nil {
-		return NewNetworkURL(self.URL.ResolveReference(neturl), self.context)
+		return self.urlContext.NewNetworkURL(self.URL.ResolveReference(neturl))
 	} else {
 		return nil
 	}
@@ -106,7 +107,7 @@ func (self *NetworkURL) Key() string {
 }
 
 // URL interface
-func (self *NetworkURL) Open() (io.ReadCloser, error) {
+func (self *NetworkURL) Open(context contextpkg.Context) (io.ReadCloser, error) {
 	if response, err := http.Get(self.string_); err == nil {
 		if response.StatusCode == http.StatusOK {
 			return response.Body, nil
@@ -121,5 +122,5 @@ func (self *NetworkURL) Open() (io.ReadCloser, error) {
 
 // URL interface
 func (self *NetworkURL) Context() *Context {
-	return self.context
+	return self.urlContext
 }

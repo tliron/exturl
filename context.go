@@ -1,6 +1,7 @@
 package exturl
 
 import (
+	contextpkg "context"
 	"fmt"
 	"net/http"
 	"os"
@@ -92,8 +93,8 @@ func (self *Context) GetCredentials(host string) *Credentials {
 	}
 }
 
-func (self *Context) OpenFile(url URL) (*os.File, error) {
-	if path, err := self.GetLocalPath(url); err == nil {
+func (self *Context) OpenFile(context contextpkg.Context, url URL) (*os.File, error) {
+	if path, err := self.GetLocalPath(context, url); err == nil {
 		return os.Open(path)
 	} else {
 		return nil, err
@@ -101,7 +102,7 @@ func (self *Context) OpenFile(url URL) (*os.File, error) {
 }
 
 // Will download the file to the local temporary directory if not already locally available
-func (self *Context) GetLocalPath(url URL) (string, error) {
+func (self *Context) GetLocalPath(context contextpkg.Context, url URL) (string, error) {
 	if fileUrl, ok := url.(*FileURL); ok {
 		// No need to download file URLs
 		return fileUrl.Path, nil
@@ -127,7 +128,7 @@ func (self *Context) GetLocalPath(url URL) (string, error) {
 	}
 
 	temporaryPathPattern := fmt.Sprintf("kutil-%s-*", util.SanitizeFilename(key))
-	if file, err := Download(url, temporaryPathPattern); err == nil {
+	if file, err := Download(context, url, temporaryPathPattern); err == nil {
 		if self.files == nil {
 			self.files = make(map[string]string)
 		}

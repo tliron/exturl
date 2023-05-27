@@ -95,8 +95,9 @@ Uses standard Go access libraries (`net/http`).
 
 ### `tar:`
 
-Tarballs. `.tar` and `.tar.gz` (or `.tgz`) are supported using standard Go decoding
-libraries (`archive/tar`, `compress/gzip`).
+Tarballs. `.tar` and `.tar.gz` (or `.tgz`) are supported.
+
+Gzip decompression uses the [pgzip library](https://github.com/klauspost/pgzip).
 
 ### `zip:`
 
@@ -108,7 +109,17 @@ Git repositories. Uses [go-git](https://github.com/go-git/go-git).
 
 ### `docker:`
 
-Docker (OCI) registries. Uses [go-containerregistry](https://github.com/google/go-containerregistry).
+Images on OCI/Docker registries. The URL structure is
+`docker://HOSTNAME/[NAMESPACE/]REPOSITORY[:TAG]`. The tag will default to "latest".
+Example:
+
+    docker://docker.io/tliron/prudence:latest
+
+The `url.Open()` API will decode the first layer (a `.tar.gz`) it finds in the image.
+The intended use case is using OCI registries to store arbitrary data. In the future
+we may support more elaborate use cases.
+
+Uses [go-containerregistry](https://github.com/google/go-containerregistry).
 
 ### `internal:`
 

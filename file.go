@@ -40,6 +40,10 @@ func (self *Context) NewValidFileURL(path string) (*FileURL, error) {
 		}
 	}
 
+	if isDir && !strings.HasSuffix(path, PathSeparator) {
+		path += PathSeparator
+	}
+
 	if info, err := os.Stat(path); err == nil {
 		if isDir {
 			if !info.Mode().IsDir() {

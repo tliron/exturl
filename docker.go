@@ -88,7 +88,7 @@ func (self *DockerURL) Open(context contextpkg.Context) (io.ReadCloser, error) {
 	pipeReader, pipeWriter := io.Pipe()
 
 	go func() {
-		if err := self.WriteLayer(pipeWriter); err == nil {
+		if err := self.WriteFirstLayer(context, pipeWriter); err == nil {
 			pipeWriter.Close()
 		} else {
 			pipeWriter.CloseWithError(err)
@@ -103,10 +103,29 @@ func (self *DockerURL) Context() *Context {
 	return self.urlContext
 }
 
-func (self *DockerURL) WriteTarball(writer io.Writer) error {
+func (self *DockerURL) WriteFirstLayer(context contextpkg.Context, writer io.Writer) error {
+	pipeReader, pipeWriter := io.Pipe()
+
+	go func() {
+		if err := self.WriteTarball(context, pipeWriter); err == nil {
+			pipeWriter.Close()
+		} else {
+			pipeWriter.CloseWithError(err)
+		}
+	}()
+
+	decoder := NewFirstTarballInTarballDecoder(pipeReader)
+	if _, err := io.Copy(writer, decoder.Decode()); err == nil {
+		return nil
+	} else {
+		return err
+	}
+}
+
+func (self *DockerURL) WriteTarball(context contextpkg.Context, writer io.Writer) error {
 	url := fmt.Sprintf("%s%s", self.URL.Host, self.URL.Path)
 	if tag, err := namepkg.NewTag(url); err == nil {
-		if image, err := remote.Image(tag, self.RemoteOptions()...); err == nil {
+		if image, err := remote.Image(tag, self.RemoteOptions(context)...); err == nil {
 			return tarball.Write(tag, image, writer)
 		} else {
 			return err
@@ -116,27 +135,8 @@ func (self *DockerURL) WriteTarball(writer io.Writer) error {
 	}
 }
 
-func (self *DockerURL) WriteLayer(writer io.Writer) error {
-	pipeReader, pipeWriter := io.Pipe()
-
-	go func() {
-		if err := self.WriteTarball(pipeWriter); err == nil {
-			pipeWriter.Close()
-		} else {
-			pipeWriter.CloseWithError(err)
-		}
-	}()
-
-	decoder := NewContainerImageLayerDecoder(pipeReader)
-	if _, err := io.Copy(writer, decoder.Decode()); err == nil {
-		return nil
-	} else {
-		return err
-	}
-}
-
-func (self *DockerURL) RemoteOptions() []remote.Option {
-	var options []remote.Option
+func (self *DockerURL) RemoteOptions(context contextpkg.Context) []remote.Option {
+	options := []remote.Option{remote.WithContext(context)}
 
 	if httpRoundTripper := self.urlContext.GetHTTPRoundTripper(self.URL.Host); httpRoundTripper != nil {
 		options = append(options, remote.WithTransport(httpRoundTripper))

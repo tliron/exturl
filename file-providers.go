@@ -3,12 +3,13 @@ package exturl
 import (
 	"archive/tar"
 	"archive/zip"
-	"compress/gzip"
 	contextpkg "context"
 	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
+
+	gzip "github.com/klauspost/pgzip"
 
 	"github.com/tliron/kutil/util"
 )

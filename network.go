@@ -23,10 +23,6 @@ type NetworkURL struct {
 }
 
 func (self *Context) NewNetworkURL(neturl *neturlpkg.URL) *NetworkURL {
-	if self == nil {
-		self = NewContext()
-	}
-
 	return &NetworkURL{
 		URL:        neturl,
 		string_:    neturl.String(),
@@ -39,10 +35,6 @@ func (self *Context) NewValidNetworkURL(neturl *neturlpkg.URL) (*NetworkURL, err
 	if response, err := http.Head(string_); err == nil {
 		response.Body.Close()
 		if response.StatusCode == http.StatusOK {
-			if self == nil {
-				self = NewContext()
-			}
-
 			return &NetworkURL{
 				URL:        neturl,
 				string_:    string_,

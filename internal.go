@@ -76,10 +76,6 @@ func (self *Context) NewInternalURL(path string) *InternalURL {
 
 func (self *Context) NewValidInternalURL(path string) (*InternalURL, error) {
 	if content, ok := internal.Load(path); ok {
-		if self == nil {
-			self = NewContext()
-		}
-
 		return &InternalURL{
 			Path:       path,
 			Content:    content.([]byte),

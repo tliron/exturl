@@ -68,6 +68,27 @@ Supported Schemes
 
 A path to the local filesystem. This is the default URL type if no schema is provided.
 
+The URL *must* begin with two slashes. If a hostname is present before the path it will
+be ignored, so this:
+
+    file://localhost/the/path
+
+is equivalent to this:
+
+    file:///the/path
+
+Relative paths are supported, but only when no scheme is provided. In other words, the
+`file:` scheme *requires* absolute paths. The consequence is that `file:` URLs usually
+begin with *three* slashes because absolute paths also begin with a slash.
+
+When compiled for Windows the URL path will be converted to a Windows path. So this:
+
+    file:///C:/Windows/win.ini
+
+will be treated as this path:
+
+    C:\Windows\win.ini
+
 ### `http:` and `https:`
 
 Uses standard Go access libraries (`net/http`).

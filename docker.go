@@ -25,10 +25,6 @@ type DockerURL struct {
 }
 
 func (self *Context) NewDockerURL(neturl *neturlpkg.URL) *DockerURL {
-	if self == nil {
-		self = NewContext()
-	}
-
 	return &DockerURL{
 		URL:        neturl,
 		string_:    neturl.String(),

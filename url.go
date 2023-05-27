@@ -33,7 +33,7 @@ func (self *Context) NewURL(url string) (URL, error) {
 	if neturl, err := neturlpkg.ParseRequestURI(url); err == nil {
 		switch neturl.Scheme {
 		case "file":
-			return self.NewFileURL(neturl.Path), nil
+			return self.NewFileURL(URLPathToFilePath(neturl.Path)), nil
 
 		case "http", "https":
 			// Go's "net/http" only handles "http:" and "https:"
@@ -70,8 +70,7 @@ func (self *Context) NewValidURL(context contextpkg.Context, url string, origins
 	if neturl, err := neturlpkg.ParseRequestURI(url); err == nil {
 		switch neturl.Scheme {
 		case "file":
-			// They're rarely used, but relative "file:" URLs are possible
-			return self.newValidRelativeURL(context, neturl.Path, origins, true)
+			return self.newValidRelativeURL(context, URLPathToFilePath(neturl.Path), origins, true)
 
 		case "http", "https":
 			// Go's "net/http" package only handles "http:" and "https:"

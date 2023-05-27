@@ -9,6 +9,8 @@ import (
 	"strings"
 )
 
+const PathSeparator = string(filepath.Separator)
+
 //
 // FileURL
 //
@@ -20,10 +22,6 @@ type FileURL struct {
 }
 
 func (self *Context) NewFileURL(path string) *FileURL {
-	if self == nil {
-		self = NewContext()
-	}
-
 	return &FileURL{
 		Path:       path,
 		urlContext: self,
@@ -31,7 +29,7 @@ func (self *Context) NewFileURL(path string) *FileURL {
 }
 
 func (self *Context) NewValidFileURL(path string) (*FileURL, error) {
-	isDir := strings.HasSuffix(path, "/")
+	isDir := strings.HasSuffix(path, PathSeparator)
 
 	if filepath.IsAbs(path) {
 		path = filepath.Clean(path)
@@ -58,10 +56,10 @@ func (self *Context) NewValidFileURL(path string) (*FileURL, error) {
 }
 
 func (self *FileURL) NewValidRelativeFileURL(path string) (*FileURL, error) {
-	isDir := strings.HasSuffix(path, "/")
+	isDir := strings.HasSuffix(path, PathSeparator)
 	path = filepath.Join(self.Path, path)
 	if isDir {
-		path += "/"
+		path += PathSeparator
 	}
 	return self.urlContext.NewValidFileURL(path)
 }
@@ -80,8 +78,8 @@ func (self *FileURL) Format() string {
 // URL interface
 func (self *FileURL) Origin() URL {
 	path := filepath.Dir(self.Path)
-	if path != "/" {
-		path += "/"
+	if path != PathSeparator {
+		path += PathSeparator
 	}
 
 	return &FileURL{
@@ -97,7 +95,18 @@ func (self *FileURL) Relative(path string) URL {
 
 // URL interface
 func (self *FileURL) Key() string {
-	return "file:" + self.Path
+	path := filepath.ToSlash(self.Path)
+	if filepath.IsAbs(self.Path) {
+		if strings.HasPrefix(path, "/") {
+			return "file://" + path
+		} else {
+			// On Windows absolute paths usually do not start with a separator, e.g. "C:\Abs\Path"
+			return "file:///" + path
+		}
+	} else {
+		// The "file:" schema does not support relative paths
+		return path
+	}
 }
 
 // URL interface
@@ -112,6 +121,19 @@ func (self *FileURL) Open(context contextpkg.Context) (io.ReadCloser, error) {
 // URL interface
 func (self *FileURL) Context() *Context {
 	return self.urlContext
+}
+
+// Utils
+
+func URLPathToFilePath(path string) string {
+	if filepath.Separator == '\\' {
+		// We don't want the "/" prefix on Windows
+		if strings.HasPrefix(path, "/") {
+			path = path[1:]
+		}
+	}
+	path = filepath.FromSlash(path)
+	return path
 }
 
 func isValidFile(path string) bool {

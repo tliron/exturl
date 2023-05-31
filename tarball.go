@@ -10,7 +10,7 @@ import (
 	"strings"
 	"sync"
 
-	gzip "github.com/klauspost/pgzip"
+	"github.com/klauspost/pgzip"
 )
 
 // Note: we *must* use the "path" package rather than "filepath" to ensure consistency with Windows
@@ -196,15 +196,18 @@ func (self *TarballURL) OpenArchive(context contextpkg.Context) (*TarballReader,
 	if archiveReader, err := self.ArchiveURL.Open(context); err == nil {
 		switch self.ArchiveFormat {
 		case "tar.gz":
-			if gzipReader, err := gzip.NewReader(archiveReader); err == nil {
+			if gzipReader, err := pgzip.NewReader(archiveReader); err == nil {
 				return NewTarballReader(tar.NewReader(gzipReader), archiveReader, gzipReader), nil
 			} else {
 				archiveReader.Close()
 				return nil, err
 			}
 
-		default:
+		case "tar":
 			return NewTarballReader(tar.NewReader(archiveReader), archiveReader, nil), nil
+
+		default:
+			return nil, fmt.Errorf("unsupported tarball format: %s", self.ArchiveFormat)
 		}
 	} else {
 		return nil, err
@@ -364,7 +367,7 @@ func OpenFirstTarballInTarball(reader io.Reader) (io.Reader, error) {
 	for {
 		if header, err := tarReader.Next(); err == nil {
 			if (header.Typeflag == tar.TypeReg) && strings.HasSuffix(header.Name, ".tar.gz") {
-				return gzip.NewReader(tarReader)
+				return pgzip.NewReader(tarReader)
 			}
 		} else if err == io.EOF {
 			return nil, NewNotFound("\"*.tar.gz\" entry not found in tarball")

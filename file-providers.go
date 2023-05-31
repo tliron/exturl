@@ -2,15 +2,14 @@ package exturl
 
 import (
 	"archive/tar"
-	"archive/zip"
 	contextpkg "context"
 	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
 
-	gzip "github.com/klauspost/pgzip"
-
+	"github.com/klauspost/compress/zip"
+	"github.com/klauspost/pgzip"
 	"github.com/tliron/kutil/util"
 )
 
@@ -264,7 +263,7 @@ func (self *TarFileProviders) Close() error {
 
 type TarGZipFileProviders struct {
 	reader     io.ReadCloser
-	gzipReader *gzip.Reader
+	gzipReader *pgzip.Reader
 	tarReader  *tar.Reader
 }
 
@@ -273,7 +272,7 @@ func NewTarGZipFileProviders(context contextpkg.Context, url URL) (*TarGZipFileP
 
 	var err error
 	if self.reader, err = url.Open(context); err == nil {
-		if self.gzipReader, err = gzip.NewReader(self.reader); err == nil {
+		if self.gzipReader, err = pgzip.NewReader(self.reader); err == nil {
 			self.tarReader = tar.NewReader(self.gzipReader)
 		} else {
 			return nil, err

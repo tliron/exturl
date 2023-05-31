@@ -1,13 +1,14 @@
 package exturl
 
 import (
-	"archive/zip"
 	contextpkg "context"
 	"fmt"
 	"io"
 	"os"
 	pathpkg "path"
 	"strings"
+
+	"github.com/klauspost/compress/zip"
 )
 
 // Note: we *must* use the "path" package rather than "filepath" to ensure consistency with Windows

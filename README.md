@@ -97,11 +97,11 @@ Uses standard Go access libraries (`net/http`).
 
 Tarballs. `.tar` and `.tar.gz` (or `.tgz`) are supported.
 
-Gzip decompression uses the [klauspost's pgzip library](https://github.com/klauspost/pgzip).
+Gzip decompression uses [klauspost's pgzip library](https://github.com/klauspost/pgzip).
 
 ### `zip:`
 
-Zip files. Uses standard [klauspost's compress](github.com/klauspost/compress/zip).
+Zip files. Uses [klauspost's compress library](github.com/klauspost/compress/zip).
 
 ### `git:`
 

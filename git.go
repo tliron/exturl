@@ -14,7 +14,6 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/transport"
 	"github.com/go-git/go-git/v5/plumbing/transport/http"
-	"github.com/tliron/kutil/util"
 )
 
 //
@@ -182,8 +181,7 @@ func (self *GitURL) OpenRepository() (*git.Repository, error) {
 			}
 		}
 
-		temporaryPathPattern := fmt.Sprintf("kutil-%s-*", util.SanitizeFilename(key))
-		if clonePath, err := os.MkdirTemp("", temporaryPathPattern); err == nil {
+		if clonePath, err := os.MkdirTemp("", GetTemporaryPathPattern(key)); err == nil {
 			if self.urlContext.dirs == nil {
 				self.urlContext.dirs = make(map[string]string)
 			}

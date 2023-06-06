@@ -2,6 +2,7 @@ package exturl
 
 import (
 	contextpkg "context"
+	"fmt"
 	"io"
 	neturlpkg "net/url"
 	"os"
@@ -100,4 +101,8 @@ func Download(context contextpkg.Context, url URL, temporaryPathPattern string) 
 	} else {
 		return nil, err
 	}
+}
+
+func GetTemporaryPathPattern(key string) string {
+	return fmt.Sprintf("exturl-%s-*", util.SanitizeFilename(key))
 }

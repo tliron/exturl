@@ -2,7 +2,6 @@ package exturl
 
 import (
 	contextpkg "context"
-	"fmt"
 	"net/http"
 	"os"
 	"sync"
@@ -127,8 +126,7 @@ func (self *Context) GetLocalPath(context contextpkg.Context, url URL) (string, 
 		}
 	}
 
-	temporaryPathPattern := fmt.Sprintf("kutil-%s-*", util.SanitizeFilename(key))
-	if file, err := Download(context, url, temporaryPathPattern); err == nil {
+	if file, err := Download(context, url, GetTemporaryPathPattern(key)); err == nil {
 		if self.files == nil {
 			self.files = make(map[string]string)
 		}

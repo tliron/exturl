@@ -16,9 +16,10 @@ Features
 
 Especially powerful is the ability to refer to entries in remote archives, e.g. a zip file
 over http. Where possible exturl will stream the data (e.g. remote tarballs), but if filesystem
-access is required (remote zip, git repository clones, Docker images) it will download them to a
-temporary local location. The use of a shared context allows for optimization, e.g. a remote
-zip file will not be downloaded again if it was already downloaded in the context. Examples:
+access is required (for remote zip, git repository clones, and Docker images) it will download
+them to a temporary local location. The use of a shared context allows for optimization, e.g. a
+remote zip file will not be downloaded again if it was already downloaded in the context.
+Examples:
 
     tar:http://mysite.org/cloud.tar.gz\!main.yaml
     git:https://github.com/tliron/puccini.git!examples/openstack/hello-world.yaml
@@ -89,23 +90,63 @@ will be treated as this path:
 
     C:\Windows\win.ini
 
+A URL with no schema will be treated as a `file:` URL. Thus this:
+
+    /the/path
+
+is equivalent to this:
+
+    file:///the/path
+
+However, note that this will *not* work for absolute Windows paths because the initial
+drive prefix (e.g. `C:`) would be interpreted as a schema. Thus, the most reliable ways
+to create `file:` URLs are to either use the full URL format (`file:///...`) or to
+call `NewFileURL()` with a path.
+
 ### `http:` and `https:`
 
 Uses standard Go access libraries (`net/http`).
 
 ### `tar:`
 
-Tarballs. `.tar` and `.tar.gz` (or `.tgz`) are supported.
+Entries in tarballs. `.tar` and `.tar.gz` (or `.tgz`) are supported. Examples:
+
+    tar:/local/path/cloud.tar.gz\!path/to/main.yaml
+    tar:http://mysite.org/cloud.tar.gz\!path/to/main.yaml
+
+Note that tarballs are serial containers optimized for streaming. That means that when
+accessed the entries will be skipped until our entry is found and then subsequent entries
+will be ignored. This means that when accessing tarballs over the network the tarball
+does *not* have to be downloaded, unlike with zip (see below).
 
 Gzip decompression uses [klauspost's pgzip library](https://github.com/klauspost/pgzip).
 
 ### `zip:`
 
-Zip files. Uses [klauspost's compress library](github.com/klauspost/compress/zip).
+Entries in zip files. Example:
+
+    zip:http://mysite.org/cloud.tar.gz\!path/to/main.yaml
+
+Note that zip files require random access and thus *must* be on the local file system.
+Consequently for remote zips the *entire* archive must be downloaded in order to access
+one entry. For optimization, exturl will make sure to download it only once per context.
+
+Uses [klauspost's compress library](github.com/klauspost/compress/zip).
 
 ### `git:`
 
-Git repositories. Uses [go-git](https://github.com/go-git/go-git).
+Files in git repositories. Example:
+
+    git:https://github.com/tliron/puccini.git!examples/openstack/hello-world.yaml
+
+You can specify a reference (tag, branch tip, or commit hash) in the URL fragment, e.g.:
+
+    git:https://github.com/tliron/puccini.git#main!examples/openstack/hello-world.yaml
+
+Because we are only interested in reading files, exturl will optimize by performing
+shallow clones of only the requested reference.
+
+Uses [go-git](https://github.com/go-git/go-git).
 
 ### `docker:`
 

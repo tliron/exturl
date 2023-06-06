@@ -15,11 +15,16 @@ import (
 
 // Note: we *must* use the "path" package rather than "filepath" to ensure consistency with Windows
 
-var internal sync.Map
+type InternalURLProvider interface {
+	OpenPath(context contextpkg.Context, path string) (io.ReadCloser, error)
+}
 
-// `content` must be []byte or string
+var internal sync.Map // []byte or InternalURLProvider
+
+// `content` can be []byte or an InternalURLProvider.
+// Other types will be converted to string and then to []byte.
 func RegisterInternalURL(path string, content any) error {
-	if _, loaded := internal.LoadOrStore(path, util.ToBytes(content)); !loaded {
+	if _, loaded := internal.LoadOrStore(path, fixInternalUrlContent(content)); !loaded {
 		return nil
 	} else {
 		return fmt.Errorf("internal URL conflict: %s", path)
@@ -31,7 +36,7 @@ func DeregisterInternalURL(path string) {
 }
 
 func UpdateInternalURL(path string, content any) {
-	internal.Store(path, util.ToBytes(content))
+	internal.Store(path, fixInternalUrlContent(content))
 }
 
 func (self *Context) ReadToInternalURL(path string, reader io.Reader) (*InternalURL, error) {
@@ -62,7 +67,7 @@ func (self *Context) ReadToInternalURLFromStdin(context contextpkg.Context, form
 
 type InternalURL struct {
 	Path    string
-	Content []byte
+	Content any
 
 	urlContext *Context
 }
@@ -75,10 +80,9 @@ func (self *Context) NewInternalURL(path string) *InternalURL {
 }
 
 func (self *Context) NewValidInternalURL(path string) (*InternalURL, error) {
-	if content, ok := internal.Load(path); ok {
+	if _, ok := internal.Load(path); ok {
 		return &InternalURL{
 			Path:       path,
-			Content:    content.([]byte),
 			urlContext: self,
 		}, nil
 	} else {
@@ -91,7 +95,7 @@ func (self *InternalURL) NewValidRelativeInternalURL(path string) (*InternalURL,
 }
 
 func (self *InternalURL) SetContent(content any) {
-	self.Content = util.ToBytes(content)
+	self.Content = fixInternalUrlContent(content)
 }
 
 // URL interface
@@ -130,10 +134,33 @@ func (self *InternalURL) Key() string {
 
 // URL interface
 func (self *InternalURL) Open(context contextpkg.Context) (io.ReadCloser, error) {
-	return io.NopCloser(bytes.NewReader(self.Content)), nil
+	content := self.Content
+
+	if content == nil {
+		var ok bool
+		if content, ok = internal.Load(self.Path); !ok {
+			return nil, NewNotFoundf("internal URL not found: %s", self.Path)
+		}
+	}
+
+	if provider, ok := content.(InternalURLProvider); ok {
+		return provider.OpenPath(context, self.Path)
+	} else {
+		return io.NopCloser(bytes.NewReader(content.([]byte))), nil
+	}
 }
 
 // URL interface
 func (self *InternalURL) Context() *Context {
 	return self.urlContext
+}
+
+// Utils
+
+func fixInternalUrlContent(content any) any {
+	if _, ok := content.(InternalURLProvider); ok {
+		return content
+	} else {
+		return util.ToBytes(content)
+	}
 }

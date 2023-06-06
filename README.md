@@ -164,5 +164,14 @@ Uses [go-containerregistry](https://github.com/google/go-containerregistry).
 
 ### `internal:`
 
-Supported APIs are `RegisterInternalURL()`, `DeregisterInternalURL()`,
-`UpdateInternalURL()`, `ReadToInternalURL()`, `ReadToInternalURLFromStdin()`.
+Internal URLs can ne stored globally so that all contexts will be able to access them.
+
+Supported APIs for global internal URLs are `RegisterInternalURL()` (which will fail if
+the URL has already been registered), `DeregisterInternalURL()`, `UpdateInternalURL()`
+(which will always succeed), `ReadToInternalURL()`, `ReadToInternalURLFromStdin()`.
+
+It is also possible to create ad-hoc internal URLs using `NewInternalURL()` and then
+`SetContent()`. These are *not* stored globally.
+
+Content can be `[]byte` or an implementation of the `InternalURLProvider` interface.
+Other types will be converted to string and then to `[]byte`.

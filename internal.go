@@ -33,50 +33,6 @@ func RegisterInternalURL(path string, content any) error {
 	}
 }
 
-func RegisterInternalURLsFromFS(fs fspkg.FS, root string, process func(path string) (string, bool)) error {
-	if root == "" {
-		root = "."
-	}
-
-	embedFs, isEmbedFs := fs.(embed.FS)
-
-	return fspkg.WalkDir(fs, root, func(path string, dirEntry fspkg.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-
-		if !dirEntry.IsDir() {
-			if internalPath, ok := process(path); ok {
-				if isEmbedFs {
-					// Optimized read for embed.FS
-					if content, err := embedFs.ReadFile(path); err == nil {
-						if err := RegisterInternalURL(internalPath, content); err != nil {
-							return err
-						}
-					} else {
-						return err
-					}
-				} else {
-					if file, err := fs.Open(path); err == nil {
-						defer file.Close()
-						if content, err := io.ReadAll(file); err == nil {
-							if err := RegisterInternalURL(internalPath, content); err != nil {
-								return err
-							}
-						} else {
-							return err
-						}
-					} else {
-						return err
-					}
-				}
-			}
-		}
-
-		return nil
-	})
-}
-
 func DeregisterInternalURL(path string) {
 	internal.Delete(path)
 }
@@ -105,6 +61,51 @@ func (self *Context) ReadToInternalURLFromStdin(context contextpkg.Context, form
 		path = fmt.Sprintf("%s.%s", path, format)
 	}
 	return self.ReadToInternalURL(path, util.NewContextualReader(context, os.Stdin))
+}
+
+func ReadToInternalURLsFromFS(context contextpkg.Context, fs fspkg.FS, root string, process func(path string) (string, bool)) error {
+	if root == "" {
+		root = "."
+	}
+
+	embedFs, isEmbedFs := fs.(embed.FS)
+
+	return fspkg.WalkDir(fs, root, func(path string, dirEntry fspkg.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if !dirEntry.IsDir() {
+			if internalPath, ok := process(path); ok {
+				if isEmbedFs {
+					// Optimized read for embed.FS
+					if content, err := embedFs.ReadFile(path); err == nil {
+						if err := RegisterInternalURL(internalPath, content); err != nil {
+							return err
+						}
+					} else {
+						return err
+					}
+				} else {
+					if file, err := fs.Open(path); err == nil {
+						reader := util.NewContextualReadCloser(context, file)
+						defer reader.Close()
+						if content, err := io.ReadAll(reader); err == nil {
+							if err := RegisterInternalURL(internalPath, content); err != nil {
+								return err
+							}
+						} else {
+							return err
+						}
+					} else {
+						return err
+					}
+				}
+			}
+		}
+
+		return nil
+	})
 }
 
 //

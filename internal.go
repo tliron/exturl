@@ -3,8 +3,10 @@ package exturl
 import (
 	"bytes"
 	contextpkg "context"
+	"embed"
 	"fmt"
 	"io"
+	fspkg "io/fs"
 	"os"
 	pathpkg "path"
 	"sync"
@@ -29,6 +31,50 @@ func RegisterInternalURL(path string, content any) error {
 	} else {
 		return fmt.Errorf("internal URL conflict: %s", path)
 	}
+}
+
+func RegisterInternalURLsFromFS(fs fspkg.FS, root string, process func(path string) (string, bool)) error {
+	if root == "" {
+		root = "."
+	}
+
+	embedFs, isEmbedFs := fs.(embed.FS)
+
+	return fspkg.WalkDir(fs, root, func(path string, dirEntry fspkg.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if !dirEntry.IsDir() {
+			if internalPath, ok := process(path); ok {
+				if isEmbedFs {
+					// Optimized read for embed.FS
+					if content, err := embedFs.ReadFile(path); err == nil {
+						if err := RegisterInternalURL(internalPath, content); err != nil {
+							return err
+						}
+					} else {
+						return err
+					}
+				} else {
+					if file, err := fs.Open(path); err == nil {
+						defer file.Close()
+						if content, err := io.ReadAll(file); err == nil {
+							if err := RegisterInternalURL(internalPath, content); err != nil {
+								return err
+							}
+						} else {
+							return err
+						}
+					} else {
+						return err
+					}
+				}
+			}
+		}
+
+		return nil
+	})
 }
 
 func DeregisterInternalURL(path string) {
@@ -67,7 +113,7 @@ func (self *Context) ReadToInternalURLFromStdin(context contextpkg.Context, form
 
 type InternalURL struct {
 	Path    string
-	Content any
+	Content any // []byte or InternalURLProvider
 
 	urlContext *Context
 }

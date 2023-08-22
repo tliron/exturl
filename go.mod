@@ -9,7 +9,7 @@ require (
 	github.com/klauspost/pgzip v1.2.6
 	github.com/segmentio/ksuid v1.0.4
 	github.com/tliron/commonlog v0.1.1
-	github.com/tliron/kutil v0.2.10
+	github.com/tliron/kutil v0.2.11
 )
 
 require (

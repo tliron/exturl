@@ -204,8 +204,12 @@ func (self *InternalURL) Context() *Context {
 
 // Utils
 
+var emptyByteArray = []byte{}
+
 func fixInternalUrlContent(content any) any {
-	if _, ok := content.(InternalURLProvider); ok {
+	if content == nil {
+		return emptyByteArray
+	} else if _, ok := content.(InternalURLProvider); ok {
 		return content
 	} else {
 		return util.ToBytes(content)

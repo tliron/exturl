@@ -95,7 +95,7 @@ func (self *Context) NewValidURL(context contextpkg.Context, url string, origins
 			return self.newValidRelativeURL(context, url, origins, false)
 		}
 	} else {
-		// Malformed URL, so it might be a relative path
+		// Malformed net URL, so it might be a relative path
 		return self.newValidRelativeURL(context, url, origins, false)
 	}
 
@@ -151,6 +151,7 @@ func (self *Context) newValidRelativeURL(context contextpkg.Context, path string
 			}
 		}
 
+		/* Security problem!
 		// Try file relative to current directory
 		url, err := self.NewValidFileURL(path)
 		if err != nil {
@@ -158,5 +159,8 @@ func (self *Context) newValidRelativeURL(context contextpkg.Context, path string
 		}
 
 		return url, nil
+		*/
+
+		return nil, fmt.Errorf("invalid URL: %s", path)
 	}
 }

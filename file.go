@@ -68,6 +68,14 @@ func (self *FileURL) NewValidRelativeFileURL(path string) (*FileURL, error) {
 	return self.urlContext.NewValidFileURL(path)
 }
 
+func (self *Context) NewWorkingDirFileURL() (*FileURL, error) {
+	if path, err := os.Getwd(); err == nil {
+		return self.NewValidFileURL(path + PathSeparator)
+	} else {
+		return nil, err
+	}
+}
+
 // URL interface
 // fmt.Stringer interface
 func (self *FileURL) String() string {

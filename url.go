@@ -62,6 +62,23 @@ func (self *Context) NewURL(url string) (URL, error) {
 	return nil, fmt.Errorf("unsupported URL format: %s", url)
 }
 
+// Use this if you are expecting a URL or a file path.
+//
+// This is necessary for Windows support, because NewURL will fail if
+// a drive prefix is used for a file path (e.g. "C:\Dir\file"), which
+// would conflict with URL scheme parasing.
+//
+// Note that if there happens to be a Windows drive with the same name
+// as a recognized URL scheme (e.g. "http") then users would have to
+// provide a full file URL, e.g. "file:///http:/Dir/file".
+func (self *Context) NewAnyOrFileURL(url string) URL {
+	if url_, err := self.NewURL(url); err == nil {
+		return url_
+	} else {
+		return self.NewFileURL(url)
+	}
+}
+
 func (self *Context) NewValidURL(context contextpkg.Context, url string, origins []URL) (URL, error) {
 	if url_, ok := self.GetMapping(url); ok {
 		url = url_
@@ -100,6 +117,23 @@ func (self *Context) NewValidURL(context contextpkg.Context, url string, origins
 	}
 
 	return nil, fmt.Errorf("unsupported URL format: %s", url)
+}
+
+// Use this if you are expecting a URL or a file path.
+//
+// This is necessary for Windows support, because NewURL will fail if
+// a drive prefix is used for a file path (e.g. "C:\Dir\file"), which
+// would conflict with URL scheme parasing.
+//
+// Note that if there happens to be a Windows drive with the same name
+// as a recognized URL scheme (e.g. "http") then users would have to
+// provide a full file URL, e.g. "file:///http:/Dir/file".
+func (self *Context) NewValidAnyOrFileURL(context contextpkg.Context, url string, origins []URL) (URL, error) {
+	if url_, err := self.NewValidURL(context, url, origins); err == nil {
+		return url_, nil
+	} else {
+		return self.NewValidFileURL(url)
+	}
 }
 
 func (self *Context) newValidRelativeURL(context contextpkg.Context, path string, origins []URL, onlyFileURLs bool) (URL, error) {

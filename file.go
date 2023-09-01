@@ -22,7 +22,7 @@ type FileURL struct {
 }
 
 // Note that the argument is treated as an OS file path
-// (using backslashes on Windows).
+// (using backslashes on Windows). The path *must* be absolute.
 //
 // Directories *must* be suffixed with an OS path separator.
 func (self *Context) NewFileURL(filePath string) *FileURL {
@@ -33,7 +33,7 @@ func (self *Context) NewFileURL(filePath string) *FileURL {
 }
 
 // Note that the argument is treated as an OS file path
-// (using backslashes on Windows).
+// (using backslashes on Windows). The path *must* be absolute.
 //
 // If the path is a directory, it will automatically be suffixed with
 // an OS path separator if it doesn't already have one.
@@ -43,10 +43,7 @@ func (self *Context) NewValidFileURL(filePath string) (*FileURL, error) {
 	if filepath.IsAbs(filePath) {
 		filePath = filepath.Clean(filePath)
 	} else {
-		var err error
-		if filePath, err = filepath.Abs(filePath); err != nil {
-			return nil, err
-		}
+		return nil, fmt.Errorf("file URL path is not absolute: %s", filePath)
 	}
 
 	if isDir && !strings.HasSuffix(filePath, PathSeparator) {
@@ -68,17 +65,16 @@ func (self *Context) NewValidFileURL(filePath string) (*FileURL, error) {
 	return self.NewFileURL(filePath), nil
 }
 
-// Note that the argument is treated as an OS file path
+// Note that the argument can be a URL-type path *or* an OS file path
 // (using backslashes on Windows).
+//
+// If the path is a directory, it will automatically be suffixed with
+// an OS path separator if it doesn't already have one.
 func (self *FileURL) NewValidRelativeFileURL(filePath string) (*FileURL, error) {
-	isDir := strings.HasSuffix(filePath, PathSeparator)
-	filePath = filepath.Join(self.Path, filePath)
-	if isDir {
-		filePath += PathSeparator
-	}
-	return self.urlContext.NewValidFileURL(filePath)
+	return self.urlContext.NewValidFileURL(self.relative(filePath))
 }
 
+// A valid URL for the working directory.
 func (self *Context) NewWorkingDirFileURL() (*FileURL, error) {
 	if path, err := os.Getwd(); err == nil {
 		return self.NewValidFileURL(path + PathSeparator)
@@ -118,7 +114,7 @@ func (self *FileURL) Origin() URL {
 //
 // URL interface
 func (self *FileURL) Relative(path string) URL {
-	return self.urlContext.NewFileURL(filepath.Join(self.Path, path))
+	return self.urlContext.NewFileURL(self.relative(path))
 }
 
 // URL interface
@@ -152,6 +148,16 @@ func (self *FileURL) Context() *Context {
 }
 
 // Utils
+
+func (self *FileURL) relative(path string) string {
+	isDir := strings.HasSuffix(path, PathSeparator)
+	path = filepath.Join(self.Path, path)
+	if isDir {
+		// file.Path join removes path suffixes
+		path += PathSeparator
+	}
+	return path
+}
 
 func URLPathToFilePath(path string) string {
 	if PathSeparator == `\` {

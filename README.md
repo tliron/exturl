@@ -66,7 +66,7 @@ Supported URL Types
 
 ### `file:`
 
-A path to the local filesystem. This is the default URL type if no schema is provided.
+An absolute path to the local filesystem.
 
 The URL *must* begin with two slashes. If a hostname is present before the path it will
 be ignored, so this:
@@ -77,9 +77,7 @@ is equivalent to this:
 
     file:///the/path
 
-Relative paths are supported, but only when no scheme is provided. In other words, the
-`file:` scheme *requires* absolute paths. The consequence is that `file:` URLs usually
-begin with *three* slashes because absolute paths also begin with a slash.
+The consequence is that most `file:` URLs beging with 3 slashes.
 
 When compiled for Windows the URL path will be converted to a Windows path. So this:
 

@@ -103,11 +103,8 @@ func (self *TarballURL) NewValidRelativeTarballURL(context contextpkg.Context, p
 
 func (self *Context) ParseTarballURL(url string) (*TarballURL, error) {
 	if archiveUrl, path, err := parseTarballURL(url); err == nil {
-		if archiveUrl_, err := self.NewURL(archiveUrl); err == nil {
-			return NewTarballURL(path, archiveUrl_, ""), nil
-		} else {
-			return nil, err
-		}
+		archiveUrl_ := self.NewAnyOrFileURL(archiveUrl)
+		return NewTarballURL(path, archiveUrl_, ""), nil
 	} else {
 		return nil, err
 	}
@@ -115,11 +112,8 @@ func (self *Context) ParseTarballURL(url string) (*TarballURL, error) {
 
 func (self *Context) ParseValidTarballURL(context contextpkg.Context, url string) (*TarballURL, error) {
 	if archiveUrl, path, err := parseTarballURL(url); err == nil {
-		if archiveUrl_, err := self.NewURL(archiveUrl); err == nil {
-			return NewValidTarballURL(context, path, archiveUrl_, "")
-		} else {
-			return nil, err
-		}
+		archiveUrl_ := self.NewAnyOrFileURL(archiveUrl)
+		return NewValidTarballURL(context, path, archiveUrl_, "")
 	} else {
 		return nil, err
 	}

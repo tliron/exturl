@@ -70,11 +70,8 @@ func (self *ZipURL) NewValidRelativeZipURL(context contextpkg.Context, path stri
 
 func (self *Context) ParseZipURL(url string) (*ZipURL, error) {
 	if archiveUrl, path, err := parseZipURL(url); err == nil {
-		if archiveUrl_, err := self.NewURL(archiveUrl); err == nil {
-			return NewZipURL(path, archiveUrl_), nil
-		} else {
-			return nil, err
-		}
+		archiveUrl_ := self.NewAnyOrFileURL(archiveUrl)
+		return NewZipURL(path, archiveUrl_), nil
 	} else {
 		return nil, err
 	}
@@ -82,11 +79,8 @@ func (self *Context) ParseZipURL(url string) (*ZipURL, error) {
 
 func (self *Context) ParseValidZipURL(context contextpkg.Context, url string) (*ZipURL, error) {
 	if archiveUrl, path, err := parseZipURL(url); err == nil {
-		if archiveUrl_, err := self.NewURL(archiveUrl); err == nil {
-			return NewValidZipURL(context, path, archiveUrl_)
-		} else {
-			return nil, err
-		}
+		archiveUrl_ := self.NewAnyOrFileURL(archiveUrl)
+		return NewValidZipURL(context, path, archiveUrl_)
 	} else {
 		return nil, err
 	}

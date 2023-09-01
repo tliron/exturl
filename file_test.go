@@ -8,15 +8,41 @@ func TestFile(t *testing.T) {
 	context := NewContext()
 	defer context.Release()
 
-	url, _ := context.NewURL("/abs/path")
-	if url.String() != "file:///abs/path" {
-		t.Error("absolute file path")
+	var absoluteFilePath, absoluteUrlString string
+	var relativeFilePath, relativeUrlString string
+
+	relativeFilePath = "../rel/path"
+	if PathSeparator == `\` {
+		// Windows
+		absoluteFilePath = `C:\abs\path`
+		absoluteUrlString = "file:///C:/abs/path"
+		relativeUrlString = "file:///C:/abs/rel/path"
+	} else {
+		absoluteFilePath = "/abs/path"
+		absoluteUrlString = "file:///abs/path"
+		relativeUrlString = "file:///abs/rel/path"
+	}
+
+	absoluteUrl, _ := context.NewURL(absoluteUrlString)
+	relativeFileUrl := context.NewFileURL(relativeFilePath)
+
+	if url_ := context.NewAnyOrFileURL(absoluteFilePath).String(); url_ != absoluteUrlString {
+		t.Errorf("absolute file path: %s", url_)
 		return
 	}
 
-	fileUrl := context.NewFileURL("rel/path")
-	if fileUrl.String() != "rel/path" {
-		t.Error("relative file path")
+	if url_ := absoluteUrl.(*FileURL).Path; url_ != absoluteFilePath {
+		t.Errorf("absolute URL: %s", url_)
+		return
+	}
+
+	if url_ := relativeFileUrl.String(); url_ != relativeFilePath {
+		t.Errorf("relative file path: %s", url_)
+		return
+	}
+
+	if url_ := absoluteUrl.Relative(relativeFilePath).String(); url_ != relativeUrlString {
+		t.Errorf("file path relative to origin: %s", url_)
 		return
 	}
 

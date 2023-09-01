@@ -30,7 +30,9 @@ Use `url.Relative()`.
 
 You can also ensure that a URL is valid (remote location is available) before attempting to
 read from it (which may trigger a download) or passing it to other parts of your program. To
-do so, use `NewValidURL()` instead of `NewURL()`.
+do so, use `NewValidURL()` instead of `NewURL()`. `NewValidURL()` also supports relative URLs
+tested against a list of potential origins. Compare with how the `PATH` environment variable
+is used by the OS to find commands.
 
 Also supported are URLs for in-memory data using a special `internal:` scheme. This allows you
 to have a unified API for accessing data, whether it's available externally or created
@@ -49,21 +51,18 @@ func ReadAll(url string) ([]byte, error) {
     urlContext := exturl.NewContext()
     defer urlContext.Release()
 
-    if url_, err = urlContext.NewURL(url); err == nil {
-        if reader, err := url_.Open(context.TODO()); err == nil {
-            defer reader.Close()
-            return io.ReadAll(reader)
-        } else {
-            return nil, err
-        }
+    url_ := urlContext.NewURL(url)
+    if reader, err := url_.Open(context.TODO()); err == nil {
+        defer reader.Close()
+        return io.ReadAll(reader)
     } else {
         return nil, err
     }
 }
 ```
 
-Supported Schemes
------------------
+Supported URL Types
+-------------------
 
 ### `file:`
 
@@ -90,18 +89,25 @@ will be treated as this path:
 
     C:\Windows\win.ini
 
-A URL with no schema will be treated as a `file:` URL. Thus this:
+Note that for security reasons relative file URLs *are not* tested against the current
+working directory (`pwd`) by default. This is unlike OS services, such as Go's `os.Open()`.
+If you do want to support the working directory then call `NewWorkingDirFileURL()` and add
+it explicitly to the origins of `NewValidURL()`.
 
-    /the/path
+It is often desirable to accept input that is *either* a URL *or* a file path. For this
+use case `NewAnyOrFileURL()` and `NewValidAnyOrFileURL()` are provided. If the argument
+is not a parsable URL it will be treated as a file path and a `*FileURL` will be returned.
 
-is equivalent to this:
+These functions introduce a rare edge case for Windows. If there happens to be a drive
+that has the same name as a supported URL scheme (e.g. "http") then callers would have
+to provide a full file URL, otherwise it will be parsed as a URL of that scheme. E.g.
+instead of:
 
-    file:///the/path
+    http:\Dir\file
 
-However, note that this will *not* work for absolute Windows paths because the initial
-drive prefix (e.g. `C:`) would be interpreted as a schema. Thus, the most reliable ways
-to create `file:` URLs are to either use the full URL format (`file:///...`) or to
-call `NewFileURL()` with a path.
+you must use:
+
+    file:///http:/Dir/file
 
 ### `http:` and `https:`
 
@@ -175,3 +181,8 @@ It is also possible to create ad-hoc internal URLs using `NewInternalURL()` and 
 
 Content can be `[]byte` or an implementation of the `InternalURLProvider` interface.
 Other types will be converted to string and then to `[]byte`.
+
+### Mock URLs
+
+These are intended to be used for testing. They must be created explicitly via
+`NewMockURL()` and can use any scheme. They are not created by `NewURL()`.

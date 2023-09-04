@@ -19,7 +19,10 @@ type Credentials struct {
 // Context
 //
 
+type URLTransformerFunc func(fromUrl string) (string, bool)
+
 type Context struct {
+	transformers      []URLTransformerFunc
 	mappings          map[string]string
 	files             map[string]string
 	dirs              map[string]string
@@ -29,14 +32,30 @@ type Context struct {
 }
 
 func NewContext() *Context {
-	return &Context{}
+	var self Context
+	self.transformers = []URLTransformerFunc{self.GetMapping}
+	return &self
 }
 
-// Set mapping to empty string to delete it
+func (self *Context) Transform(fromUrl string) (string, bool) {
+	for _, transformer := range self.transformers {
+		if toUrl, ok := transformer(fromUrl); ok {
+			return toUrl, true
+		}
+	}
+	return "", false
+}
+
+func (self *Context) AddTransformer(transformer URLTransformerFunc) {
+	self.transformers = append(self.transformers, transformer)
+}
+
+// Set toUrl to empty string to delete the mapping.
 func (self *Context) Map(fromUrl string, toUrl string) {
 	if self.mappings == nil {
 		self.mappings = make(map[string]string)
 	}
+
 	if toUrl == "" {
 		delete(self.mappings, fromUrl)
 	} else {
@@ -44,6 +63,7 @@ func (self *Context) Map(fromUrl string, toUrl string) {
 	}
 }
 
+// URLTransformerFunc signature
 func (self *Context) GetMapping(fromUrl string) (string, bool) {
 	if self.mappings == nil {
 		return "", false
@@ -57,6 +77,7 @@ func (self *Context) SetHTTPRoundTripper(host string, httpRoundTripper http.Roun
 	if self.httpRoundTrippers == nil {
 		self.httpRoundTrippers = make(map[string]http.RoundTripper)
 	}
+
 	self.httpRoundTrippers[host] = httpRoundTripper
 }
 
@@ -75,6 +96,7 @@ func (self *Context) SetCredentials(host string, username string, password strin
 	if self.credentials == nil {
 		self.credentials = make(map[string]*Credentials)
 	}
+
 	self.credentials[host] = &Credentials{
 		Username: username,
 		Password: password,

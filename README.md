@@ -28,15 +28,26 @@ Another powerful feature is support for relative URLs using common filesystem pa
 usage of `..` and `.`. All URL types support this: file URLs, local and remote zip URLs, etc.
 Use `url.Relative()`.
 
-You can also ensure that a URL is valid (remote location is available) before attempting to
-read from it (which may trigger a download) or passing it to other parts of your program. To
-do so, use `NewValidURL()` instead of `NewURL()`. `NewValidURL()` also supports relative URLs
-tested against a list of potential origins. Compare with how the `PATH` environment variable
-is used by the OS to find commands.
+You can also ensure that a URL is valid (e.g. remote location is available, tarball entry
+exists, etc.) before attempting to read from it (which may trigger a download) or passing it
+to other parts of your program. To do so, use `NewValidURL()` instead of `NewURL()`.
+`NewValidURL()` also supports relative URLs tested against a list of potential bases.
+Compare with how the `PATH` environment variable is used by the OS to find commands.
+
+The combination of relative URL and archive support allows for embedded relative URLs,
+for example as imports or references in configuration files or parsed code. These trivially
+will "always work" whatever the base URL is, whether it's a directory in the local filesystem,
+a tarball, and even a remote tarball. Exturl will do the heavy lifting to make sure that
+the content is readable.
 
 Also supported are URLs for in-memory data using a special `internal:` scheme. This allows you
 to have a unified API for accessing data, whether it's available externally or created
 internally by your program.
+
+Finally, there are tools for mocking and testing, e.g. a `MockURL` type that can mimic any
+scheme with arbitrary data, and support for custom URL transformation functions, including
+straightforward mapping of URLs to other URLs. For example, you can map a `http:` URL
+to a `file:` or `internal:` URL.
 
 Example
 -------
@@ -64,12 +75,16 @@ func ReadAll(url string) ([]byte, error) {
 Supported URL Types
 -------------------
 
+### `http:` and `https:`
+
+Uses standard Go access libraries (`net/http`). `Open()` is an HTTP GET verb.
+
 ### `file:`
 
 An absolute path to the local filesystem.
 
-The URL *must* begin with two slashes. If a hostname is present before the path it will
-be ignored, so this:
+The URL must begin with two slashes. If a hostname is present before the path it will
+be ignored by exturl, so this:
 
     file://localhost/the/path
 
@@ -77,28 +92,31 @@ is equivalent to this:
 
     file:///the/path
 
-The consequence is that most `file:` URLs beging with 3 slashes.
+Because the path must be absolute, it always begins with a slash. The consequence is that
+most `file:` URLs beging with 3 slashes.
 
-When compiled for Windows the URL path will be converted to a Windows path. So this:
+When compiled for Windows the URL path will be converted to a Windows path. The convention
+is that backslashes become slashes and a first slash is added to make it absolute. So this
+URL:
 
     file:///C:/Windows/win.ini
 
-will be treated as this path:
+is equivalent to this path:
 
     C:\Windows\win.ini
 
 Note that for security reasons relative file URLs *are not* tested against the current
 working directory (`pwd`) by default. This is unlike OS services, such as Go's `os.Open()`.
 If you do want to support the working directory then call `NewWorkingDirFileURL()` and add
-it explicitly to the origins of `NewValidURL()`.
+it explicitly to the bases of `NewValidURL()`.
 
 It is often desirable to accept input that is *either* a URL *or* a file path. For this
 use case `NewAnyOrFileURL()` and `NewValidAnyOrFileURL()` are provided. If the argument
 is not a parsable URL it will be treated as a file path and a `*FileURL` will be returned.
 
-These functions introduce a rare edge case for Windows. If there happens to be a drive
-that has the same name as a supported URL scheme (e.g. "http") then callers would have
-to provide a full file URL, otherwise it will be parsed as a URL of that scheme. E.g.
+The functions' design may trip over a rare edge case for Windows. If there happens to be
+a drive that has the same name as a supported URL scheme, e.g. "http", then callers would
+have to provide a full file URL, otherwise it will be parsed as a URL of that scheme. E.g.
 instead of:
 
     http:\Dir\file
@@ -107,39 +125,39 @@ you must use:
 
     file:///http:/Dir/file
 
-### `http:` and `https:`
-
-Uses standard Go access libraries (`net/http`).
-
 ### `tar:`
 
-Entries in tarballs. `.tar` and `.tar.gz` (or `.tgz`) are supported. Examples:
+Entries in tarballs. `.tar` and `.tar.gz` (or `.tgz`) are supported. The archive URL
+can be any full exturl URL *or* a local filesystem path. Examples:
 
-    tar:/local/path/cloud.tar.gz\!path/to/main.yaml
     tar:http://mysite.org/cloud.tar.gz\!path/to/main.yaml
+    tar:file:///local/path/cloud.tar.gz\!path/to/main.yaml
+    tar:/local/path/cloud.tar.gz\!path/to/main.yaml
 
-Note that tarballs are serial containers optimized for streaming. That means that when
-accessed the entries will be skipped until our entry is found and then subsequent entries
-will be ignored. This means that when accessing tarballs over the network the tarball
-does *not* have to be downloaded, unlike with zip (see below).
+Note that tarballs are serial containers optimized for streaming, meaning that, when
+read, unwanted entries will be skipped until our entry is found, and then subsequent
+entries will be ignored. This means that when accessing tarballs over the network the
+tarball does *not* have to be downloaded in its entirety, unlike with zip (see below).
 
 Gzip decompression uses [klauspost's pgzip library](https://github.com/klauspost/pgzip).
 
 ### `zip:`
 
-Entries in zip files. Example:
+Entries in zip files. The archive URL can be any full exturl URL *or* a local
+filesystem path. Example:
 
     zip:http://mysite.org/cloud.tar.gz\!path/to/main.yaml
 
-Note that zip files require random access and thus *must* be on the local file system.
+Note that zip files require random access and thus must be on the local file system.
 Consequently for remote zips the *entire* archive must be downloaded in order to access
 one entry. For optimization, exturl will make sure to download it only once per context.
 
-Uses [klauspost's compress library](github.com/klauspost/compress/zip).
+Uses [klauspost's compress library](https://github.com/klauspost/compress).
 
 ### `git:`
 
-Files in git repositories. Example:
+Files in git repositories. The repository URL is *not* an exturl URL, but rather must
+be URLs supported by [go-git](https://github.com/go-git/go-git). Example:
 
     git:https://github.com/tliron/puccini.git!examples/openstack/hello-world.yaml
 
@@ -147,10 +165,8 @@ You can specify a reference (tag, branch tip, or commit hash) in the URL fragmen
 
     git:https://github.com/tliron/puccini.git#main!examples/openstack/hello-world.yaml
 
-Because we are only interested in reading files, exturl will optimize by performing
-shallow clones of only the requested reference.
-
-Uses [go-git](https://github.com/go-git/go-git).
+Because we are only interested in reading files, not making commits, exturl will optimize
+by performing shallow clones of *only* the requested reference.
 
 ### `docker:`
 
@@ -168,17 +184,17 @@ Uses [go-containerregistry](https://github.com/google/go-containerregistry).
 
 ### `internal:`
 
-Internal URLs can ne stored globally so that all contexts will be able to access them.
+Internal URLs can be stored globally so that all contexts are able to access them.
 
 Supported APIs for global internal URLs are `RegisterInternalURL()` (which will fail if
 the URL has already been registered), `DeregisterInternalURL()`, `UpdateInternalURL()`
 (which will always succeed), `ReadToInternalURL()`, `ReadToInternalURLFromStdin()`.
 
 It is also possible to create ad-hoc internal URLs using `NewInternalURL()` and then
-`SetContent()`. These are *not* stored globally.
+`url.SetContent()`. These are *not* stored globally.
 
 Content can be `[]byte` or an implementation of the `InternalURLProvider` interface.
-Other types will be converted to string and then to `[]byte`.
+Other types will be converted to strings and then to `[]byte`.
 
 ### Mock URLs
 

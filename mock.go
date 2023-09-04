@@ -3,7 +3,6 @@ package exturl
 import (
 	"bytes"
 	contextpkg "context"
-	"fmt"
 	"io"
 	pathpkg "path"
 )
@@ -20,6 +19,8 @@ type MockURL struct {
 	urlContext *Context
 }
 
+// "content" can be []byte or an [InternalURLProvider].
+// Other types will be converted to string and then to []byte.
 func (self *Context) NewMockURL(scheme string, path string, content any) *MockURL {
 	return &MockURL{
 		Scheme:     scheme,
@@ -29,19 +30,18 @@ func (self *Context) NewMockURL(scheme string, path string, content any) *MockUR
 	}
 }
 
-// URL interface
-// fmt.Stringer interface
+// ([URL] interface, [fmt.Stringer] interface)
 func (self *MockURL) String() string {
 	return self.Key()
 }
 
-// URL interface
+// ([URL] interface)
 func (self *MockURL) Format() string {
 	return GetFormat(self.Path)
 }
 
-// URL interface
-func (self *MockURL) Origin() URL {
+// ([URL] interface)
+func (self *MockURL) Base() URL {
 	path := pathpkg.Dir(self.Path)
 	if path != "/" {
 		path += "/"
@@ -55,7 +55,7 @@ func (self *MockURL) Origin() URL {
 	}
 }
 
-// URL interface
+// ([URL] interface)
 func (self *MockURL) Relative(path string) URL {
 	return &MockURL{
 		Scheme:     self.Scheme,
@@ -65,12 +65,17 @@ func (self *MockURL) Relative(path string) URL {
 	}
 }
 
-// URL interface
-func (self *MockURL) Key() string {
-	return fmt.Sprintf("%s:%s", self.Scheme, self.Path)
+// ([URL] interface)
+func (self *MockURL) ValidRelative(context contextpkg.Context, path string) (URL, error) {
+	return self.Relative(path), nil
 }
 
-// URL interface
+// ([URL] interface)
+func (self *MockURL) Key() string {
+	return self.Scheme + ":" + self.Path
+}
+
+// ([URL] interface)
 func (self *MockURL) Open(context contextpkg.Context) (io.ReadCloser, error) {
 	if provider, ok := self.Content.(InternalURLProvider); ok {
 		return provider.OpenPath(context, self.Path)
@@ -79,7 +84,16 @@ func (self *MockURL) Open(context contextpkg.Context) (io.ReadCloser, error) {
 	}
 }
 
-// URL interface
+// ([URL] interface)
 func (self *MockURL) Context() *Context {
 	return self.urlContext
+}
+
+// Updates the contents of this instance only. To change the globally registered
+// content use [UpdateInternalURL].
+//
+// "content" can be []byte or an [InternalURLProvider].
+// Other types will be converted to string and then to []byte.
+func (self *MockURL) SetContent(content any) {
+	self.Content = fixInternalUrlContent(content)
 }

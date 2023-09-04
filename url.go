@@ -8,61 +8,86 @@ import (
 	"path/filepath"
 )
 
-// Note: we *must* use the "path" package here rather than "filepath" to ensure consistency with Windows
-
 //
 // URL
 //
 
 type URL interface {
-	// Returns a string representation of the URL that can be used by [NewURL] to
-	// recreate this URL.
+	// Returns a string representation of the URL that can be used by
+	// Context.NewURL to recreate this URL.
+	//
+	// (fmt.Stringer interface)
 	String() string
 
 	// Format of the URL content's default representation.
 	//
-	// Should return "yaml", "json", "xml", etc., or an empty string if the format
+	// Can return "yaml", "json", "xml", etc., or an empty string if the format
 	// is unknown.
+	//
+	// The format is often derived from a file extension if available, otherwise
+	// it might be retrieved from metadata.
+	//
+	// An attempt is made to standardize the return values, e.g. a "yml" file
+	// extension is always returned as "yaml", and a "tar.gz" file extension is
+	// always returned as "tgz".
 	Format() string
 
-	// Returns the equivalent of a "base directory" for the URL.
+	// Returns a URL that is the equivalent of a "base directory" for this URL.
 	//
-	// The origin can be used in two ways:
+	// Base URLs always often have a trailing slash to signify that they are
+	// "directories" rather than "files". One notable exception is "file:" URLs
+	// when compiled on Windows, in which case a trailing backslash is used
+	// instead.
 	//
-	// 1. You can call Relative on it to get a sibling URL to this one (relative to
-	//    the same "base directory").
-	// 2. You can use it in the origins list argument of [NewValidURL] for the same
-	//    purpose.
+	// The base is often used in two ways:
 	//
-	// Note that the origin might not be a valid URL in itself, e.g. you might not
+	// 1. You can call URL.Relative on it to get a sibling URL to this one (relative
+	//    to the same "base directory").
+	// 2. You can use it in the "bases" list argument of Context.NewValidURL for the
+	//    same purpose.
+	//
+	// Note that the base might not be a valid URL in itself, e.g. you might not
 	// be able to call Open on it.
-	Origin() URL
+	Base() URL
 
-	// Parses the argument as a path relative to this URL. That means this this
-	// URL is treated as a "directory".
-	//
-	// Returns an absolute URL.
+	// Parses the argument as a path relative to the URL. That means that this
+	// URL is treated as a "base directory" (see URL.Base). The argument supports
+	// ".." and ".", with the returned URL path always being absolute.
 	Relative(path string) URL
 
-	// Returns a string that uniquely identifies this URL.
+	// As URL.Relative but returns a valid URL.
+	ValidRelative(context contextpkg.Context, path string) (URL, error)
+
+	// Returns a string that uniquely identifies the URL.
 	//
-	// Useful as map keys.
+	// Useful for map and cache keys.
 	Key() string
 
 	// Opens the URL for reading.
 	//
-	// It is the caller's responsibility to Close the reader.
+	// Note that for some URLs it can involve lengthy operations, e.g. cloning a
+	// remote repository or downloading an archive. For this reason a cancellable
+	// context can be provided as an argument.
+	//
+	// An effort is made to not repeat these lengthy operations by caching related
+	// state in the URL's exturl Context (caching is deliberately not done globally).
+	// For example, when accessing a "git:" URL on a remote git repository then that
+	// repository will be cloned locally only if it's the first the repository has been
+	// referred to for the exturl Context. Subsequent Open calls for URLs that refer
+	// to the same git repository will reuse the existing clone.
+	//
+	// It is the caller's responsibility to call Close on the reader.
 	Open(context contextpkg.Context) (io.ReadCloser, error)
 
-	// The context used to create this URL.
+	// The exturl context used to create this URL.
 	Context() *Context
 }
 
 // Parses the argument as an absolute URL.
 //
-// To support relative URLs, see [NewValidURL].
+// To support relative URLs, see [Context.NewValidURL].
 //
-// If you are expecting either a URL *or* a file path, consider [NewAnyOrFileURL].
+// If you are expecting either a URL or a file path, consider [Context.NewAnyOrFileURL].
 func (self *Context) NewURL(url string) (URL, error) {
 	if mappedUrl, ok := self.GetMapping(url); ok {
 		url = mappedUrl
@@ -70,13 +95,13 @@ func (self *Context) NewURL(url string) (URL, error) {
 
 	if neturl, err := neturlpkg.ParseRequestURI(url); err == nil {
 		switch neturl.Scheme {
-		case "file":
-			filePath := URLPathToFilePath(neturl.Path)
-			return self.NewFileURL(filePath), nil
-
 		case "http", "https":
 			// Go's "net/http" only handles "http:" and "https:"
 			return self.NewNetworkURL(neturl), nil
+
+		case "file":
+			filePath := URLPathToFilePath(neturl.Path)
+			return self.NewFileURL(filePath), nil
 
 		case "tar":
 			return self.ParseTarballURL(url)
@@ -101,12 +126,12 @@ func (self *Context) NewURL(url string) (URL, error) {
 	}
 }
 
-// Parses the argument as *either* an absolute URL *or* a file path.
+// Parses the argument as either an absolute URL or a file path.
 //
-// In essence attempts to parse the URL via [NewURL] and if that fails
-// treats the URL as a file path and returns a *[FileURL].
+// In essence attempts to parse the URL via [Context.NewURL] and if that fails
+// treats the URL as a file path and returns a [*FileURL].
 //
-// To support relative URLs, see [NewValidAnyOrFileURL].
+// To support relative URLs, see [Context.NewValidAnyOrFileURL].
 //
 // On Windows note that if there happens to be a drive that has the same
 // name as a supported URL scheme (e.g. "http") then callers would have
@@ -121,53 +146,53 @@ func (self *Context) NewAnyOrFileURL(urlOrPath string) URL {
 	}
 }
 
-// Parses the argument as *either* an absolute URL *or* a relative path.
-// Relative paths support ".." and ".", with the returned URL path being
-// absolute.
+// Parses the argument as either an absolute URL or a relative path.
+// Relative paths support ".." and ".", with the returned URL path always
+// being absolute.
 //
 // The returned URL is "valid", meaning that during this call it was
 // possible to call Open on it. Of course this can't guarantee that
 // future calls to Open will succeed.
 //
-// Relative URLs are tested against the origins argument in order. The
-// first valid URL will be returned and the remaining origins will be
-// ignored.
+// Relative URLs are tested against the "bases" argument in order. The
+// first valid URL will be returned and the remaining bases will be
+// ignored. Note that bases can be any of any URL type.
 //
-// If you are expecting either a URL *or* a file path, consider
-// [NewValidAnyOrFileURL].
-func (self *Context) NewValidURL(context contextpkg.Context, urlOrPath string, origins []URL) (URL, error) {
-	return self.newValidUrl(context, urlOrPath, origins, false)
+// If you are expecting either a URL or a file path, consider
+// [Context.NewValidAnyOrFileURL].
+func (self *Context) NewValidURL(context contextpkg.Context, urlOrPath string, bases []URL) (URL, error) {
+	return self.newValidUrl(context, urlOrPath, bases, false)
 }
 
-// Parses the argument as an absolute URL *or* an absolute file path
-// *or* a relative path. Relative paths support ".." and ".", with the
-// returned URL path being absolute.
+// Parses the argument as an absolute URL or an absolute file path
+// or a relative path. Relative paths support ".." and ".", with the
+// returned URL path always being absolute.
 //
 // The returned URL is "valid", meaning that during this call it was
 // possible to call Open on it. Of course this can't guarantee that
 // future calls to Open will succeed.
 //
-// Relative URLs are tested against the origins argument in order. The
-// first valid URL will be returned and the remaining origins will be
-// ignored.
-func (self *Context) NewValidAnyOrFileURL(context contextpkg.Context, urlOrPath string, origins []URL) (URL, error) {
-	return self.newValidUrl(context, urlOrPath, origins, true)
+// Relative URLs are tested against the "bases" argument in order. The
+// first valid URL will be returned and the remaining bases will be
+// ignored. Note that bases can be any of any URL type.
+func (self *Context) NewValidAnyOrFileURL(context contextpkg.Context, urlOrPath string, bases []URL) (URL, error) {
+	return self.newValidUrl(context, urlOrPath, bases, true)
 }
 
-func (self *Context) newValidUrl(context contextpkg.Context, urlOrPath string, origins []URL, orFile bool) (URL, error) {
+func (self *Context) newValidUrl(context contextpkg.Context, urlOrPath string, bases []URL, orFile bool) (URL, error) {
 	if mappedUrl, ok := self.GetMapping(urlOrPath); ok {
 		urlOrPath = mappedUrl
 	}
 
 	if neturl, err := neturlpkg.ParseRequestURI(urlOrPath); err == nil {
 		switch neturl.Scheme {
-		case "file":
-			filePath := URLPathToFilePath(neturl.Path)
-			return self.NewValidFileURL(filePath)
-
 		case "http", "https":
 			// Go's "net/http" only handles "http:" and "https:"
 			return self.NewValidNetworkURL(neturl)
+
+		case "file":
+			filePath := URLPathToFilePath(neturl.Path)
+			return self.NewValidFileURL(filePath)
 
 		case "tar":
 			return self.ParseValidTarballURL(context, urlOrPath)
@@ -198,28 +223,16 @@ func (self *Context) newValidUrl(context contextpkg.Context, urlOrPath string, o
 	}
 
 	// Treat as relative path
-	for _, origin := range origins {
+	for _, base := range bases {
 		var url URL
 		var err error
 
-		switch origin_ := origin.(type) {
+		switch base_ := base.(type) {
 		case *FileURL:
-			url, err = origin_.NewValidRelativeFileURL(filePath)
+			url, err = base_.ValidRelative(context, filePath)
 
-		case *NetworkURL:
-			url, err = origin_.NewValidRelativeNetworkURL(urlOrPath)
-
-		case *TarballURL:
-			url, err = origin_.NewValidRelativeTarballURL(context, urlOrPath)
-
-		case *ZipURL:
-			url, err = origin_.NewValidRelativeZipURL(context, urlOrPath)
-
-		case *GitURL:
-			url, err = origin_.NewValidRelativeGitURL(urlOrPath)
-
-		case *InternalURL:
-			url, err = origin_.NewValidRelativeInternalURL(urlOrPath)
+		default:
+			url, err = base_.ValidRelative(context, urlOrPath)
 		}
 
 		if err == nil {

@@ -75,20 +75,6 @@ func (self *Context) NewValidGitURL(path string, repositoryUrl string) (*GitURL,
 	}
 }
 
-func (self *GitURL) NewValidRelativeGitURL(path string) (*GitURL, error) {
-	gitUrl := self.Relative(path).(*GitURL)
-	if _, err := gitUrl.OpenRepository(); err == nil {
-		path_ := filepath.Join(gitUrl.clonePath, gitUrl.Path)
-		if _, err := os.Stat(path_); err == nil {
-			return gitUrl, nil
-		} else {
-			return nil, err
-		}
-	} else {
-		return nil, err
-	}
-}
-
 func (self *Context) ParseGitURL(url string) (*GitURL, error) {
 	if repositoryUrl, path, err := parseGitURL(url); err == nil {
 		return self.NewGitURL(path, repositoryUrl), nil
@@ -105,19 +91,18 @@ func (self *Context) ParseValidGitURL(url string) (*GitURL, error) {
 	}
 }
 
-// URL interface
-// fmt.Stringer interface
+// ([URL] interface, [fmt.Stringer] interface)
 func (self *GitURL) String() string {
 	return self.Key()
 }
 
-// URL interface
+// ([URL] interface)
 func (self *GitURL) Format() string {
 	return GetFormat(self.Path)
 }
 
-// URL interface
-func (self *GitURL) Origin() URL {
+// ([URL] interface)
+func (self *GitURL) Base() URL {
 	path := pathpkg.Dir(self.Path)
 	if path != "/" {
 		path += "/"
@@ -131,7 +116,7 @@ func (self *GitURL) Origin() URL {
 	}
 }
 
-// URL interface
+// ([URL] interface)
 func (self *GitURL) Relative(path string) URL {
 	return &GitURL{
 		Path:          pathpkg.Join(self.Path, path),
@@ -141,12 +126,27 @@ func (self *GitURL) Relative(path string) URL {
 	}
 }
 
-// URL interface
+// ([URL] interface)
+func (self *GitURL) ValidRelative(context contextpkg.Context, path string) (URL, error) {
+	gitUrl := self.Relative(path).(*GitURL)
+	if _, err := gitUrl.OpenRepository(); err == nil {
+		path_ := filepath.Join(gitUrl.clonePath, gitUrl.Path)
+		if _, err := os.Stat(path_); err == nil {
+			return gitUrl, nil
+		} else {
+			return nil, err
+		}
+	} else {
+		return nil, err
+	}
+}
+
+// ([URL] interface)
 func (self *GitURL) Key() string {
 	return fmt.Sprintf("git:%s!/%s", self.RepositoryURL, self.Path)
 }
 
-// URL interface
+// ([URL] interface)
 func (self *GitURL) Open(context contextpkg.Context) (io.ReadCloser, error) {
 	if _, err := self.OpenRepository(); err == nil {
 		path := filepath.Join(self.clonePath, self.Path)
@@ -160,7 +160,7 @@ func (self *GitURL) Open(context contextpkg.Context) (io.ReadCloser, error) {
 	}
 }
 
-// URL interface
+// ([URL] interface)
 func (self *GitURL) Context() *Context {
 	return self.urlContext
 }

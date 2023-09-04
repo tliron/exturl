@@ -16,15 +16,20 @@ const PathSeparator = string(filepath.Separator)
 //
 
 type FileURL struct {
+	// This is an absolute OS file path.
+	//
+	// That means that when compiled on Windows it will expect and use
+	// backslashes as path separators in addition to other Windows
+	// filesystem convnentions.
 	Path string
 
 	urlContext *Context
 }
 
 // Note that the argument is treated as an OS file path
-// (using backslashes on Windows). The path *must* be absolute.
+// (using backslashes on Windows). The path must be absolute.
 //
-// Directories *must* be suffixed with an OS path separator.
+// Directories must be suffixed with an OS path separator.
 func (self *Context) NewFileURL(filePath string) *FileURL {
 	return &FileURL{
 		Path:       filePath,
@@ -33,18 +38,18 @@ func (self *Context) NewFileURL(filePath string) *FileURL {
 }
 
 // Note that the argument is treated as an OS file path
-// (using backslashes on Windows). The path *must* be absolute.
+// (using backslashes on Windows). The path must be absolute.
 //
 // If the path is a directory, it will automatically be suffixed with
 // an OS path separator if it doesn't already have one.
 func (self *Context) NewValidFileURL(filePath string) (*FileURL, error) {
-	isDir := strings.HasSuffix(filePath, PathSeparator)
-
-	if filepath.IsAbs(filePath) {
-		filePath = filepath.Clean(filePath)
-	} else {
+	if !filepath.IsAbs(filePath) {
 		return nil, fmt.Errorf("file URL path is not absolute: %s", filePath)
 	}
+
+	isDir := strings.HasSuffix(filePath, PathSeparator)
+
+	filePath = filepath.Clean(filePath)
 
 	if isDir && !strings.HasSuffix(filePath, PathSeparator) {
 		filePath += PathSeparator
@@ -65,15 +70,6 @@ func (self *Context) NewValidFileURL(filePath string) (*FileURL, error) {
 	return self.NewFileURL(filePath), nil
 }
 
-// Note that the argument can be a URL-type path *or* an OS file path
-// (using backslashes on Windows).
-//
-// If the path is a directory, it will automatically be suffixed with
-// an OS path separator if it doesn't already have one.
-func (self *FileURL) NewValidRelativeFileURL(filePath string) (*FileURL, error) {
-	return self.urlContext.NewValidFileURL(self.relative(filePath))
-}
-
 // A valid URL for the working directory.
 func (self *Context) NewWorkingDirFileURL() (*FileURL, error) {
 	if path, err := os.Getwd(); err == nil {
@@ -83,19 +79,18 @@ func (self *Context) NewWorkingDirFileURL() (*FileURL, error) {
 	}
 }
 
-// URL interface
-// fmt.Stringer interface
+// ([URL] interface, [fmt.Stringer] interface)
 func (self *FileURL) String() string {
 	return self.Key()
 }
 
-// URL interface
+// ([URL] interface)
 func (self *FileURL) Format() string {
 	return GetFormat(self.Path)
 }
 
-// URL interface
-func (self *FileURL) Origin() URL {
+// ([URL] interface)
+func (self *FileURL) Base() URL {
 	path := filepath.Dir(self.Path)
 	if path != PathSeparator {
 		path += PathSeparator
@@ -107,17 +102,28 @@ func (self *FileURL) Origin() URL {
 	}
 }
 
-// Note that the argument can be a URL-type path *or* an OS file path
+// Note that the argument can be a URL-type path or an OS file path
 // (using backslashes on Windows).
 //
-// Directories *must* be suffixed with an OS path separator.
+// Directories must be suffixed with an OS path separator.
 //
-// URL interface
+// ([URL] interface)
 func (self *FileURL) Relative(path string) URL {
 	return self.urlContext.NewFileURL(self.relative(path))
 }
 
-// URL interface
+// Note that the argument can be a URL-type path or an OS file path
+// (using backslashes on Windows).
+//
+// If the path is a directory, it will automatically be suffixed with
+// an OS path separator if it doesn't already have one.
+//
+// ([URL] interface)
+func (self *FileURL) ValidRelative(context contextpkg.Context, filePath string) (URL, error) {
+	return self.urlContext.NewValidFileURL(self.relative(filePath))
+}
+
+// ([URL] interface)
 func (self *FileURL) Key() string {
 	path := filepath.ToSlash(self.Path)
 	if filepath.IsAbs(self.Path) {
@@ -133,7 +139,7 @@ func (self *FileURL) Key() string {
 	}
 }
 
-// URL interface
+// ([URL] interface)
 func (self *FileURL) Open(context contextpkg.Context) (io.ReadCloser, error) {
 	if reader, err := os.Open(self.Path); err == nil {
 		return reader, nil
@@ -142,7 +148,7 @@ func (self *FileURL) Open(context contextpkg.Context) (io.ReadCloser, error) {
 	}
 }
 
-// URL interface
+// ([URL] interface)
 func (self *FileURL) Context() *Context {
 	return self.urlContext
 }

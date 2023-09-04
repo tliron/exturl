@@ -44,13 +44,12 @@ func (self *Context) NewValidDockerURL(neturl *neturlpkg.URL) (*DockerURL, error
 	return self.NewDockerURL(neturl), nil
 }
 
-// URL interface
-// fmt.Stringer interface
+// ([URL] interface, [fmt.Stringer] interface)
 func (self *DockerURL) String() string {
 	return self.Key()
 }
 
-// URL interface
+// ([URL] interface)
 func (self *DockerURL) Format() string {
 	format := self.URL.Query().Get("format")
 	if format != "" {
@@ -60,8 +59,8 @@ func (self *DockerURL) Format() string {
 	}
 }
 
-// URL interface
-func (self *DockerURL) Origin() URL {
+// ([URL] interface)
+func (self *DockerURL) Base() URL {
 	url := *self
 	url.URL.Path = path.Dir(url.URL.Path)
 	if url.URL.Path != "/" {
@@ -71,7 +70,7 @@ func (self *DockerURL) Origin() URL {
 	return &url
 }
 
-// URL interface
+// ([URL] interface)
 func (self *DockerURL) Relative(path string) URL {
 	if neturl, err := neturlpkg.Parse(path); err == nil {
 		return self.urlContext.NewDockerURL(self.URL.ResolveReference(neturl))
@@ -80,12 +79,17 @@ func (self *DockerURL) Relative(path string) URL {
 	}
 }
 
-// URL interface
+// ([URL] interface)
+func (self *DockerURL) ValidRelative(context contextpkg.Context, path string) (URL, error) {
+	return self.urlContext.NewValidDockerURL(self.Relative(path).(*DockerURL).URL)
+}
+
+// ([URL] interface)
 func (self *DockerURL) Key() string {
 	return self.string_
 }
 
-// URL interface
+// ([URL] interface)
 func (self *DockerURL) Open(context contextpkg.Context) (io.ReadCloser, error) {
 	pipeReader, pipeWriter := io.Pipe()
 
@@ -100,7 +104,7 @@ func (self *DockerURL) Open(context contextpkg.Context) (io.ReadCloser, error) {
 	return pipeReader, nil
 }
 
-// URL interface
+// ([URL] interface)
 func (self *DockerURL) Context() *Context {
 	return self.urlContext
 }
@@ -125,7 +129,7 @@ func (self *DockerURL) WriteFirstLayer(context contextpkg.Context, writer io.Wri
 }
 
 func (self *DockerURL) WriteTarball(context contextpkg.Context, writer io.Writer) error {
-	url := fmt.Sprintf("%s%s", self.URL.Host, self.URL.Path)
+	url := self.URL.Host + self.URL.Path
 	if tag, err := namepkg.NewTag(url); err == nil {
 		if image, err := remote.Image(tag, self.RemoteOptions(context)...); err == nil {
 			return tarball.Write(tag, image, writer)

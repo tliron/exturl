@@ -5,15 +5,13 @@ import (
 	contextpkg "context"
 	"fmt"
 	"io"
-	"os"
 	pathpkg "path"
 	"strings"
-	"sync"
 
 	"github.com/klauspost/pgzip"
 )
 
-// Note: we *must* use the "path" package rather than "filepath" to ensure consistency with Windows
+// Note: we must use the "path" package rather than "filepath" to ensure consistency with Windows
 
 // TODO: xz support, consider: https://github.com/ulikunitz/xz
 
@@ -78,7 +76,59 @@ func NewValidTarballURL(context contextpkg.Context, path string, archiveUrl URL,
 	}
 }
 
-func (self *TarballURL) NewValidRelativeTarballURL(context contextpkg.Context, path string) (*TarballURL, error) {
+func (self *Context) ParseTarballURL(url string) (*TarballURL, error) {
+	if archiveUrl, path, err := parseTarballURL(url); err == nil {
+		archiveUrl_ := self.NewAnyOrFileURL(archiveUrl)
+		return NewTarballURL(path, archiveUrl_, ""), nil
+	} else {
+		return nil, err
+	}
+}
+
+func (self *Context) ParseValidTarballURL(context contextpkg.Context, url string) (*TarballURL, error) {
+	if archiveUrl, path, err := parseTarballURL(url); err == nil {
+		archiveUrl_ := self.NewAnyOrFileURL(archiveUrl)
+		return NewValidTarballURL(context, path, archiveUrl_, "")
+	} else {
+		return nil, err
+	}
+}
+
+// ([URL] interface, [fmt.Stringer] interface)
+func (self *TarballURL) String() string {
+	return self.Key()
+}
+
+// ([URL] interface)
+func (self *TarballURL) Format() string {
+	return GetFormat(self.Path)
+}
+
+// ([URL] interface)
+func (self *TarballURL) Base() URL {
+	path := pathpkg.Dir(self.Path)
+	if path != "/" {
+		path += "/"
+	}
+
+	return &TarballURL{
+		Path:          path,
+		ArchiveURL:    self.ArchiveURL,
+		ArchiveFormat: self.ArchiveFormat,
+	}
+}
+
+// ([URL] interface)
+func (self *TarballURL) Relative(path string) URL {
+	return &TarballURL{
+		Path:          pathpkg.Join(self.Path, path),
+		ArchiveURL:    self.ArchiveURL,
+		ArchiveFormat: self.ArchiveFormat,
+	}
+}
+
+// ([URL] interface)
+func (self *TarballURL) ValidRelative(context contextpkg.Context, path string) (URL, error) {
 	tarballUrl := self.Relative(path).(*TarballURL)
 	if tarballReader, err := tarballUrl.OpenArchive(context); err == nil {
 		defer tarballReader.Close()
@@ -101,64 +151,12 @@ func (self *TarballURL) NewValidRelativeTarballURL(context contextpkg.Context, p
 	}
 }
 
-func (self *Context) ParseTarballURL(url string) (*TarballURL, error) {
-	if archiveUrl, path, err := parseTarballURL(url); err == nil {
-		archiveUrl_ := self.NewAnyOrFileURL(archiveUrl)
-		return NewTarballURL(path, archiveUrl_, ""), nil
-	} else {
-		return nil, err
-	}
-}
-
-func (self *Context) ParseValidTarballURL(context contextpkg.Context, url string) (*TarballURL, error) {
-	if archiveUrl, path, err := parseTarballURL(url); err == nil {
-		archiveUrl_ := self.NewAnyOrFileURL(archiveUrl)
-		return NewValidTarballURL(context, path, archiveUrl_, "")
-	} else {
-		return nil, err
-	}
-}
-
-// URL interface
-// fmt.Stringer interface
-func (self *TarballURL) String() string {
-	return self.Key()
-}
-
-// URL interface
-func (self *TarballURL) Format() string {
-	return GetFormat(self.Path)
-}
-
-// URL interface
-func (self *TarballURL) Origin() URL {
-	path := pathpkg.Dir(self.Path)
-	if path != "/" {
-		path += "/"
-	}
-
-	return &TarballURL{
-		Path:          path,
-		ArchiveURL:    self.ArchiveURL,
-		ArchiveFormat: self.ArchiveFormat,
-	}
-}
-
-// URL interface
-func (self *TarballURL) Relative(path string) URL {
-	return &TarballURL{
-		Path:          pathpkg.Join(self.Path, path),
-		ArchiveURL:    self.ArchiveURL,
-		ArchiveFormat: self.ArchiveFormat,
-	}
-}
-
-// URL interface
+// ([URL] interface)
 func (self *TarballURL) Key() string {
 	return fmt.Sprintf("tar:%s!/%s", self.ArchiveURL.String(), self.Path)
 }
 
-// URL interface
+// ([URL] interface)
 func (self *TarballURL) Open(context contextpkg.Context) (io.ReadCloser, error) {
 	if tarballReader, err := self.OpenArchive(context); err == nil {
 		if tarballEntryReader, err := tarballReader.Open(self.Path); err == nil {
@@ -177,7 +175,7 @@ func (self *TarballURL) Open(context contextpkg.Context) (io.ReadCloser, error) 
 	}
 }
 
-// URL interface
+// ([URL] interface)
 func (self *TarballURL) Context() *Context {
 	return self.ArchiveURL.Context()
 }
@@ -189,6 +187,9 @@ func (self *TarballURL) OpenArchive(context contextpkg.Context) (*TarballReader,
 
 	if archiveReader, err := self.ArchiveURL.Open(context); err == nil {
 		switch self.ArchiveFormat {
+		case "tar":
+			return NewTarballReader(tar.NewReader(archiveReader), archiveReader, nil), nil
+
 		case "tar.gz":
 			if gzipReader, err := pgzip.NewReader(archiveReader); err == nil {
 				return NewTarballReader(tar.NewReader(gzipReader), archiveReader, gzipReader), nil
@@ -196,9 +197,6 @@ func (self *TarballURL) OpenArchive(context contextpkg.Context) (*TarballReader,
 				archiveReader.Close()
 				return nil, err
 			}
-
-		case "tar":
-			return NewTarballReader(tar.NewReader(archiveReader), archiveReader, nil), nil
 
 		default:
 			return nil, fmt.Errorf("unsupported tarball format: %s", self.ArchiveFormat)
@@ -208,168 +206,7 @@ func (self *TarballURL) OpenArchive(context contextpkg.Context) (*TarballReader,
 	}
 }
 
-//
-// TarballReader
-//
-
-type TarballReader struct {
-	TarReader         *tar.Reader
-	ArchiveReader     io.ReadCloser
-	CompressionReader io.ReadCloser
-}
-
-func NewTarballReader(reader *tar.Reader, archiveReader io.ReadCloser, compressionReader io.ReadCloser) *TarballReader {
-	return &TarballReader{reader, archiveReader, compressionReader}
-}
-
-// io.Closer interface
-func (self *TarballReader) Close() error {
-	var err1 error
-	if self.CompressionReader != nil {
-		err1 = self.CompressionReader.Close()
-	}
-	err2 := self.ArchiveReader.Close()
-	if err1 != nil {
-		return err1
-	} else {
-		return err2
-	}
-}
-
-func (self *TarballReader) Open(path string) (*TarballEntryReader, error) {
-	for {
-		if header, err := self.TarReader.Next(); err == nil {
-			if path == fixTarballEntryPath(header.Name) {
-				return NewTarballEntryReader(self), nil
-			}
-		} else if err == io.EOF {
-			break
-		} else {
-			return nil, err
-		}
-	}
-	return nil, nil
-}
-
-func (self *TarballReader) Has(path string) (bool, error) {
-	for {
-		if header, err := self.TarReader.Next(); err == nil {
-			if path == fixTarballEntryPath(header.Name) {
-				return true, nil
-			}
-		} else if err == io.EOF {
-			break
-		} else {
-			return false, err
-		}
-	}
-	return false, nil
-}
-
-func (self *TarballReader) Iterate(f func(*tar.Header) bool) error {
-	for {
-		if header, err := self.TarReader.Next(); err == nil {
-			if !f(header) {
-				return nil
-			}
-		} else if err == io.EOF {
-			break
-		} else {
-			return err
-		}
-	}
-	return nil
-}
-
-//
-// TarballEntryReader
-//
-
-type TarballEntryReader struct {
-	TarballReader *TarballReader
-}
-
-func NewTarballEntryReader(tarballReader *TarballReader) *TarballEntryReader {
-	return &TarballEntryReader{tarballReader}
-}
-
-// io.Reader interface
-func (self *TarballEntryReader) Read(p []byte) (n int, err error) {
-	return self.TarballReader.TarReader.Read(p)
-}
-
-// io.Closer interface
-func (self *TarballEntryReader) Close() error {
-	return self.TarballReader.Close()
-}
-
-//
-// FirstTarballInTarballDecoder
-//
-// Decodes the first tar entry with a ".tar.gz" extension
-//
-
-type FirstTarballInTarballDecoder struct {
-	reader     io.Reader
-	pipeReader *io.PipeReader
-	pipeWriter *io.PipeWriter
-	waitGroup  sync.WaitGroup
-}
-
-func NewFirstTarballInTarballDecoder(reader io.Reader) *FirstTarballInTarballDecoder {
-	pipeReader, pipeWriter := io.Pipe()
-	return &FirstTarballInTarballDecoder{
-		reader:     reader,
-		pipeReader: pipeReader,
-		pipeWriter: pipeWriter,
-	}
-}
-
-func (self *FirstTarballInTarballDecoder) Decode() io.Reader {
-	self.waitGroup.Add(1)
-	go self.copyFirstTarball()
-	return self.pipeReader
-}
-
-func (self *FirstTarballInTarballDecoder) Drain() {
-	self.waitGroup.Wait()
-}
-
-func (self *FirstTarballInTarballDecoder) copyFirstTarball() {
-	defer self.waitGroup.Done()
-
-	if reader, err := OpenFirstTarballInTarball(self.reader); err == nil {
-		if _, err := io.Copy(self.pipeWriter, reader); err == nil {
-			self.pipeWriter.Close()
-		} else {
-			self.pipeWriter.CloseWithError(err)
-		}
-	} else {
-		self.pipeWriter.CloseWithError(err)
-	}
-}
-
 // Utils
-
-func OpenTarballFromFile(file *os.File) (*TarballReader, error) {
-	return NewTarballReader(tar.NewReader(file), file, nil), nil // BAD
-}
-
-func OpenFirstTarballInTarball(reader io.Reader) (io.Reader, error) {
-	tarReader := tar.NewReader(reader)
-
-	for {
-		if header, err := tarReader.Next(); err == nil {
-			if (header.Typeflag == tar.TypeReg) && strings.HasSuffix(header.Name, ".tar.gz") {
-				return pgzip.NewReader(tarReader)
-			}
-		} else if err == io.EOF {
-			return nil, NewNotFound("\"*.tar.gz\" entry not found in tarball")
-		} else {
-			return nil, err
-		}
-	}
-}
 
 func parseTarballURL(url string) (string, string, error) {
 	if strings.HasPrefix(url, "tar:") {

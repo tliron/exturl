@@ -42,7 +42,7 @@ func TestFile(t *testing.T) {
 	}
 
 	if url_ := absoluteUrl.Relative(relativeFilePath).String(); url_ != relativeUrlString {
-		t.Errorf("file path relative to origin: %s", url_)
+		t.Errorf("file path relative to base: %s", url_)
 		return
 	}
 

@@ -9,7 +9,7 @@ import (
 	"path"
 )
 
-// Note: we *must* use the "path" package rather than "filepath" to ensure consistency with Windows
+// Note: we must use the "path" package rather than "filepath" to ensure consistency with Windows
 
 //
 // NetworkURL
@@ -48,22 +48,12 @@ func (self *Context) NewValidNetworkURL(neturl *neturlpkg.URL) (*NetworkURL, err
 	}
 }
 
-func (self *NetworkURL) NewValidRelativeNetworkURL(path string) (*NetworkURL, error) {
-	if neturl, err := neturlpkg.Parse(path); err == nil {
-		neturl = self.URL.ResolveReference(neturl)
-		return self.urlContext.NewValidNetworkURL(neturl)
-	} else {
-		return nil, err
-	}
-}
-
-// URL interface
-// fmt.Stringer interface
+// ([URL] interface, [fmt.Stringer] interface)
 func (self *NetworkURL) String() string {
 	return self.Key()
 }
 
-// URL interface
+// ([URL] interface)
 func (self *NetworkURL) Format() string {
 	format := self.URL.Query().Get("format")
 	if format != "" {
@@ -73,8 +63,8 @@ func (self *NetworkURL) Format() string {
 	}
 }
 
-// URL interface
-func (self *NetworkURL) Origin() URL {
+// ([URL] interface)
+func (self *NetworkURL) Base() URL {
 	url := *self
 	url.URL.Path = path.Dir(url.URL.Path)
 	if url.URL.Path != "/" {
@@ -84,7 +74,7 @@ func (self *NetworkURL) Origin() URL {
 	return &url
 }
 
-// URL interface
+// ([URL] interface)
 func (self *NetworkURL) Relative(path string) URL {
 	if neturl, err := neturlpkg.Parse(path); err == nil {
 		return self.urlContext.NewNetworkURL(self.URL.ResolveReference(neturl))
@@ -93,12 +83,22 @@ func (self *NetworkURL) Relative(path string) URL {
 	}
 }
 
-// URL interface
+// ([URL] interface)
+func (self *NetworkURL) ValidRelative(context contextpkg.Context, path string) (URL, error) {
+	if neturl, err := neturlpkg.Parse(path); err == nil {
+		neturl = self.URL.ResolveReference(neturl)
+		return self.urlContext.NewValidNetworkURL(neturl)
+	} else {
+		return nil, err
+	}
+}
+
+// ([URL] interface)
 func (self *NetworkURL) Key() string {
 	return self.string_
 }
 
-// URL interface
+// ([URL] interface)
 func (self *NetworkURL) Open(context contextpkg.Context) (io.ReadCloser, error) {
 	if response, err := http.Get(self.string_); err == nil {
 		if response.StatusCode == http.StatusOK {
@@ -112,7 +112,7 @@ func (self *NetworkURL) Open(context contextpkg.Context) (io.ReadCloser, error) 
 	}
 }
 
-// URL interface
+// ([URL] interface)
 func (self *NetworkURL) Context() *Context {
 	return self.urlContext
 }

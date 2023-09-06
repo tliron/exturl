@@ -21,7 +21,7 @@ them to a temporary local location. The use of a shared context allows for optim
 remote zip file will not be downloaded again if it was already downloaded in the context.
 Examples:
 
-    tar:http://mysite.org/cloud.tar.gz\!main.yaml
+    tar:http://mysite.org/cloud.tar.gz!main.yaml
     git:https://github.com/tliron/puccini.git!examples/openstack/hello-world.yaml
 
 Another powerful feature is support for relative URLs using common filesystem paths, including
@@ -130,9 +130,9 @@ you must use:
 Entries in tarballs. `.tar` and `.tar.gz` (or `.tgz`) are supported. The archive URL
 can be any full exturl URL *or* a local filesystem path. Examples:
 
-    tar:http://mysite.org/cloud.tar.gz\!path/to/main.yaml
-    tar:file:///local/path/cloud.tar.gz\!path/to/main.yaml
-    tar:/local/path/cloud.tar.gz\!path/to/main.yaml
+    tar:http://mysite.org/cloud.tar.gz!path/to/main.yaml
+    tar:file:///local/path/cloud.tar.gz!path/to/main.yaml
+    tar:/local/path/cloud.tar.gz!path/to/main.yaml
 
 Note that tarballs are serial containers optimized for streaming, meaning that, when
 read, unwanted entries will be skipped until our entry is found, and then subsequent
@@ -146,7 +146,7 @@ Gzip decompression uses [klauspost's pgzip library](https://github.com/klauspost
 Entries in zip files. The archive URL can be any full exturl URL *or* a local
 filesystem path. Example:
 
-    zip:http://mysite.org/cloud.tar.gz\!path/to/main.yaml
+    zip:http://mysite.org/cloud.tar.gz!path/to/main.yaml
 
 Note that zip files require random access and thus must be on the local file system.
 Consequently for remote zips the *entire* archive must be downloaded in order to access

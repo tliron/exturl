@@ -11,6 +11,24 @@ Simply put, it allows you to get a Go `Reader` from a wide variety of URL types,
 specific entries in archives using a URL structure inspired by Java's
 [JarURLConnection](https://docs.oracle.com/javase/8/docs/api/java/net/JarURLConnection.html).
 
+Rationale
+---------
+
+1) Do you have a program or API server that needs to read from a file? If there is no strong
+   reason for the file to be local, then exturl allows you to give the user the option of
+   providing a URL to the file instead of a local path. This is not only for convenience: callers
+   might not have write access to the local filesystem needed to download remote files, and anyway
+   downloading can be unnecessary inefficient, especially if the file is inside a large remote
+   tarball. Exturl will let you stream just the data you need, avoiding local caching whenever
+   possible.
+
+2) Does that file reference other files in relation to its current location? Such embedded
+   relative paths are often challenging to resolve if the "current location" is remote or inside
+   an archive (or inside a remote archive!), which is one reason why some implementations insist
+   on only supporting local filesystem. Exturl does efficient relative path resolution for *all*
+   its supported URL schemes (even remote archives!), again making it easy for your program to
+   accept URLs. 
+
 Features
 --------
 
@@ -24,9 +42,9 @@ Examples:
     tar:http://mysite.org/cloud.tar.gz!main.yaml
     git:https://github.com/tliron/puccini.git!examples/openstack/hello-world.yaml
 
-Another powerful feature is support for relative URLs using common filesystem paths, including
-usage of `..` and `.`. All URL types support this: file URLs, local and remote zip URLs, etc.
-Use `url.Relative()`.
+Another powerful feature is support for relative URL resolution using common filesystem-type
+paths, which includes usage of `..` and `.`. All URL types support this: file URLs, local and
+remote zip URLs, etc. Use `url.Relative()`.
 
 You can also ensure that a URL is valid (e.g. remote location is available, tarball entry
 exists, etc.) before attempting to read from it (which may trigger a download) or passing it
@@ -34,20 +52,14 @@ to other parts of your program. To do so, use `NewValidURL()` instead of `NewURL
 `NewValidURL()` also supports relative URLs tested against a list of potential bases.
 Compare with how the `PATH` environment variable is used by the OS to find commands.
 
-The combination of relative URL and archive support allows for embedded relative URLs,
-for example as imports or references in configuration files or parsed code. These trivially
-will "always work" whatever the base URL is, whether it's a directory in the local filesystem,
-a tarball, and even a remote tarball. Exturl will do the heavy lifting to make sure that
-the content is readable.
-
 Also supported are URLs for in-memory data using a special `internal:` scheme. This allows you
 to have a unified API for accessing data, whether it's available externally or created
 internally by your program.
 
 Finally, there are tools for mocking and testing, e.g. a `MockURL` type that can mimic any
-scheme with arbitrary data, and support for custom URL transformation functions, including
-straightforward mapping of URLs to other URLs. For example, you can map a `http:` URL
-to a `file:` or `internal:` URL.
+scheme with arbitrary data, and there is support for custom URL transformation functions
+within a context, including straightforward mapping of URLs to other URLs. For example, you
+can map a `http:` URL to a `file:` or `internal:` URL.
 
 Example
 -------
@@ -148,9 +160,11 @@ filesystem path. Example:
 
     zip:http://mysite.org/cloud.tar.gz!path/to/main.yaml
 
-Note that zip files require random access and thus must be on the local file system.
-Consequently for remote zips the *entire* archive must be downloaded in order to access
-one entry. For optimization, exturl will make sure to download it only once per context.
+Note that zip files require random file access and thus *must* be on the local file
+system. Consequently for remote zips the *entire* archive must be downloaded in order
+to access one entry. Thus, if you have a choice of compression technologies and want
+good remote support, zip should be avoid. In any case, for optimization exturl will
+make sure to download the zip only once per context.
 
 Uses [klauspost's compress library](https://github.com/klauspost/compress).
 
@@ -166,7 +180,7 @@ You can specify a reference (tag, branch tip, or commit hash) in the URL fragmen
     git:https://github.com/tliron/puccini.git#main!examples/openstack/hello-world.yaml
 
 Because we are only interested in reading files, not making commits, exturl will optimize
-by performing shallow clones of *only* the requested reference.
+by performing a shallow clone (depth=1) of *only* the requested reference.
 
 ### `docker:`
 

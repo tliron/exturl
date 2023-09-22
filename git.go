@@ -91,7 +91,7 @@ func (self *Context) ParseValidGitURL(url string) (*GitURL, error) {
 	}
 }
 
-// ([URL] interface, [fmt.Stringer] interface)
+// ([fmt.Stringer] interface)
 func (self *GitURL) String() string {
 	return self.Key()
 }

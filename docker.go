@@ -44,7 +44,7 @@ func (self *Context) NewValidDockerURL(neturl *neturlpkg.URL) (*DockerURL, error
 	return self.NewDockerURL(neturl), nil
 }
 
-// ([URL] interface, [fmt.Stringer] interface)
+// ([fmt.Stringer] interface)
 func (self *DockerURL) String() string {
 	return self.Key()
 }

@@ -48,7 +48,7 @@ func (self *Context) NewValidNetworkURL(neturl *neturlpkg.URL) (*NetworkURL, err
 	}
 }
 
-// ([URL] interface, [fmt.Stringer] interface)
+// ([fmt.Stringer] interface)
 func (self *NetworkURL) String() string {
 	return self.Key()
 }

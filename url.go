@@ -13,11 +13,7 @@ import (
 //
 
 type URL interface {
-	// Returns a string representation of the URL that can be used by
-	// Context.NewURL to recreate this URL.
-	//
-	// (fmt.Stringer interface)
-	String() string
+	fmt.Stringer
 
 	// Format of the URL content's default representation.
 	//

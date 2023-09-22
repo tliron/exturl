@@ -79,7 +79,7 @@ func (self *Context) NewWorkingDirFileURL() (*FileURL, error) {
 	}
 }
 
-// ([URL] interface, [fmt.Stringer] interface)
+// ([fmt.Stringer] interface)
 func (self *FileURL) String() string {
 	return self.Key()
 }

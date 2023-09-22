@@ -66,7 +66,7 @@ func (self *Context) ParseValidZipURL(context contextpkg.Context, url string) (*
 	}
 }
 
-// ([URL] interface, [fmt.Stringer] interface)
+// ([fmt.Stringer] interface)
 func (self *ZipURL) String() string {
 	return self.Key()
 }

@@ -30,7 +30,7 @@ func (self *Context) NewMockURL(scheme string, path string, content any) *MockUR
 	}
 }
 
-// ([URL] interface, [fmt.Stringer] interface)
+// ([fmt.Stringer] interface)
 func (self *MockURL) String() string {
 	return self.Key()
 }

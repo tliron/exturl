@@ -94,7 +94,7 @@ func (self *Context) ParseValidTarballURL(context contextpkg.Context, url string
 	}
 }
 
-// ([URL] interface, [fmt.Stringer] interface)
+// ([fmt.Stringer] interface)
 func (self *TarballURL) String() string {
 	return self.Key()
 }

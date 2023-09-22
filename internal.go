@@ -186,7 +186,7 @@ func (self *Context) NewValidInternalURL(path string) (*InternalURL, error) {
 	}
 }
 
-// ([URL] interface, [fmt.Stringer] interface)
+// ([fmt.Stringer] interface)
 func (self *InternalURL) String() string {
 	return self.Key()
 }

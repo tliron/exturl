@@ -20,7 +20,7 @@ func NewNotFoundf(format string, arg ...any) *NotFound {
 	return NewNotFound(fmt.Sprintf(format, arg...))
 }
 
-// error interface
+// (error interface)
 func (self *NotFound) Error() string {
 	return self.Message
 }
@@ -46,7 +46,7 @@ func NewNotImplementedf(format string, arg ...any) *NotImplemented {
 	return NewNotImplemented(fmt.Sprintf(format, arg...))
 }
 
-// error interface
+// (error interface)
 func (self *NotImplemented) Error() string {
 	return self.Message
 }

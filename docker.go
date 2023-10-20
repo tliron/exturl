@@ -13,6 +13,7 @@ import (
 	namepkg "github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
+	"github.com/tliron/kutil/compression"
 )
 
 //
@@ -120,9 +121,12 @@ func (self *DockerURL) WriteFirstLayer(context contextpkg.Context, writer io.Wri
 		}
 	}()
 
-	decoder := NewFirstTarballInTarballDecoder(pipeReader)
+	decoder := compression.NewFirstTarballInTarballDecoder(pipeReader)
 	if _, err := io.Copy(writer, decoder.Decode()); err == nil {
 		return nil
+	} else if err == io.EOF {
+		// TODO: test that this happens
+		return NewNotFound("\"*.tar.gz\" entry not found in tarball")
 	} else {
 		return err
 	}

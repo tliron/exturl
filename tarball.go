@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/klauspost/pgzip"
+	"github.com/tliron/kutil/util"
 )
 
 // Note: we must use the "path" package rather than "filepath" to ensure consistency with Windows
@@ -60,7 +61,7 @@ func NewValidTarballURL(context contextpkg.Context, path string, archiveUrl URL,
 
 		for {
 			if header, err := tarballReader.TarReader.Next(); err == nil {
-				if self.Path == fixTarballEntryPath(header.Name) {
+				if self.Path == util.FixTarballEntryPath(header.Name) {
 					return self, nil
 				}
 			} else if err == io.EOF {
@@ -135,7 +136,7 @@ func (self *TarballURL) ValidRelative(context contextpkg.Context, path string) (
 
 		for {
 			if header, err := tarballReader.TarReader.Next(); err == nil {
-				if tarballUrl.Path == fixTarballEntryPath(header.Name) {
+				if tarballUrl.Path == util.FixTarballEntryPath(header.Name) {
 					return tarballUrl, nil
 				}
 			} else if err == io.EOF {
@@ -180,7 +181,7 @@ func (self *TarballURL) Context() *Context {
 	return self.ArchiveURL.Context()
 }
 
-func (self *TarballURL) OpenArchive(context contextpkg.Context) (*TarballReader, error) {
+func (self *TarballURL) OpenArchive(context contextpkg.Context) (*util.TarballReader, error) {
 	if !IsValidTarballArchiveFormat(self.ArchiveFormat) {
 		return nil, fmt.Errorf("unsupported tarball archive format: %q", self.ArchiveFormat)
 	}
@@ -188,11 +189,11 @@ func (self *TarballURL) OpenArchive(context contextpkg.Context) (*TarballReader,
 	if archiveReader, err := self.ArchiveURL.Open(context); err == nil {
 		switch self.ArchiveFormat {
 		case "tar":
-			return NewTarballReader(tar.NewReader(archiveReader), archiveReader, nil), nil
+			return util.NewTarballReader(tar.NewReader(archiveReader), archiveReader, nil), nil
 
 		case "tar.gz":
 			if gzipReader, err := pgzip.NewReader(archiveReader); err == nil {
-				return NewTarballReader(tar.NewReader(gzipReader), archiveReader, gzipReader), nil
+				return util.NewTarballReader(tar.NewReader(gzipReader), archiveReader, gzipReader), nil
 			} else {
 				archiveReader.Close()
 				return nil, err
@@ -218,11 +219,4 @@ func parseTarballURL(url string) (string, string, error) {
 	} else {
 		return "", "", fmt.Errorf("not a \"tar:\" URL: %s", url)
 	}
-}
-
-func fixTarballEntryPath(path string) string {
-	if strings.HasPrefix(path, "./") {
-		return path[3:]
-	}
-	return path
 }

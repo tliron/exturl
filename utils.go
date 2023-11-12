@@ -6,6 +6,7 @@ import (
 	neturlpkg "net/url"
 	"os"
 
+	"github.com/tliron/commonlog"
 	"github.com/tliron/kutil/util"
 )
 
@@ -28,7 +29,7 @@ func GetPath(url URL) (string, error) {
 func ReadBytes(context contextpkg.Context, url URL) ([]byte, error) {
 	if reader, err := url.Open(context); err == nil {
 		reader = util.NewContextualReadCloser(context, reader)
-		defer reader.Close()
+		defer commonlog.CallAndLogWarning(reader.Close, "exturl.ReadBytes", log)
 		return io.ReadAll(reader)
 	} else {
 		return nil, err
@@ -46,7 +47,7 @@ func ReadString(context contextpkg.Context, url URL) (string, error) {
 func Size(context contextpkg.Context, url URL) (int64, error) {
 	if reader, err := url.Open(context); err == nil {
 		reader = util.NewContextualReadCloser(context, reader)
-		defer reader.Close()
+		defer commonlog.CallAndLogWarning(reader.Close, "exturl.Size", log)
 		return util.ReaderSize(reader)
 	} else {
 		return 0, err
@@ -57,7 +58,7 @@ func DownloadTo(context contextpkg.Context, url URL, path string) error {
 	if writer, err := os.Create(path); err == nil {
 		if reader, err := url.Open(context); err == nil {
 			reader = util.NewContextualReadCloser(context, reader)
-			defer reader.Close()
+			defer commonlog.CallAndLogWarning(reader.Close, "exturl.DownloadTo", log)
 			log.Infof("downloading from %q to file %q", url.String(), path)
 			if _, err = io.Copy(writer, reader); err == nil {
 				return nil
@@ -78,7 +79,7 @@ func Download(context contextpkg.Context, url URL, temporaryPathPattern string) 
 		path := file.Name()
 		if reader, err := url.Open(context); err == nil {
 			reader = util.NewContextualReadCloser(context, reader)
-			defer reader.Close()
+			defer commonlog.CallAndLogWarning(reader.Close, "exturl.Download", log)
 			log.Infof("downloading from %q to temporary file %q", url.String(), path)
 			if _, err = io.Copy(file, reader); err == nil {
 				util.OnExitError(func() error {

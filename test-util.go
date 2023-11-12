@@ -23,7 +23,7 @@ type testProvider struct {
 	content []byte
 }
 
-// InternalURLProvider interface
+// ([InternalURLProvider] interface)
 func (self *testProvider) OpenPath(context contextpkg.Context, path string) (io.ReadCloser, error) {
 	return io.NopCloser(bytes.NewReader(self.content)), nil
 }

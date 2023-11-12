@@ -12,6 +12,7 @@ import (
 	"sync"
 
 	"github.com/segmentio/ksuid"
+	"github.com/tliron/commonlog"
 	"github.com/tliron/kutil/util"
 )
 
@@ -95,7 +96,7 @@ func ReadToInternalURLsFromFS(context contextpkg.Context, fs fspkg.FS, root stri
 				} else {
 					if file, err := fs.Open(path); err == nil {
 						reader := util.NewContextualReadCloser(context, file)
-						defer reader.Close()
+						defer commonlog.CallAndLogWarning(reader.Close, "exturl.ReadToInternalURLsFromFS", log)
 						if content, err := io.ReadAll(reader); err == nil {
 							if err := RegisterInternalURL(internalPath, content); err != nil {
 								return err

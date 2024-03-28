@@ -11,6 +11,10 @@ import (
 
 const PathSeparator = string(filepath.Separator)
 
+// TODO: support "dir packages" with ! character, e.g:
+// file:///mydir!this/is/the/file
+// Is this really necessary?
+
 //
 // FileURL
 //
@@ -63,6 +67,8 @@ func (self *Context) NewValidFileURL(filePath string) (*FileURL, error) {
 		} else if !info.Mode().IsRegular() {
 			return nil, fmt.Errorf("file URL path does not point to a file: %s", filePath)
 		}
+	} else if os.IsNotExist(err) {
+		return nil, fmt.Errorf("file URL path not found: %s", filePath)
 	} else {
 		return nil, err
 	}
@@ -159,7 +165,7 @@ func (self *FileURL) relative(path string) string {
 	isDir := strings.HasSuffix(path, PathSeparator)
 	path = filepath.Join(self.Path, path)
 	if isDir {
-		// file.Path join removes path suffixes
+		// filepath.Join removes path suffixes
 		path += PathSeparator
 	}
 	return path

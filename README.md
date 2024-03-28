@@ -5,9 +5,9 @@ exturl
 [![Go Reference](https://pkg.go.dev/badge/github.com/tliron/exturl.svg)](https://pkg.go.dev/github.com/tliron/exturl)
 [![Go Report Card](https://goreportcard.com/badge/github.com/tliron/exturl)](https://goreportcard.com/report/github.com/tliron/exturl)
 
-URLs for Go on steroids.
+Go beyond `http://` with this advanced Go URL library.
 
-Simply put, it allows you to get a Go `Reader` from a wide variety of URL types, including
+Simply put, exturl allows you to get a Go `Reader` from a wide variety of URL types, including
 specific entries in archives using a URL structure inspired by Java's
 [JarURLConnection](https://docs.oracle.com/javase/8/docs/api/java/net/JarURLConnection.html).
 
@@ -16,16 +16,13 @@ Rationale
 
 1) Do you have a program or API server that needs to read from a file? If there is no strong
    reason for the file to be local, then exturl allows you to give the user the option of
-   providing a URL to the file instead of a local path. This is not only for convenience: callers
-   might not have write access to the local filesystem needed to download remote files, and anyway
-   downloading can be unnecessary inefficient, especially if the file is inside a large remote
-   tarball. Exturl will let you stream just the data you need, avoiding local caching whenever
-   possible.
+   providing a URL to the file instead of a local path. Exturl will let you stream just the data
+   you need, e.g. a single entry in a remote tarball, avoiding local caching whenever possible.
 
-2) Does that file reference other files in relation to its current location? Such embedded
-   relative paths are often challenging to resolve if the "current location" is remote or inside
-   an archive (or inside a remote archive!), which is one reason why some implementations insist
-   on only supporting local filesystem. Exturl does efficient relative path resolution for *all*
+2) Does that file reference other files in relation to its location? Such embedded relative paths
+   are often challenging to resolve if the "current location" is remote or inside an archive (or
+   inside a *remote* archive!). This complexit is one reason why some implementations insist on
+   only supporting local filesystem. Exturl does efficient relative path resolution for *all*
    its supported URL schemes (even remote archives!), again making it easy for your program to
    accept URLs. 
 
@@ -105,7 +102,7 @@ is equivalent to this:
     file:///the/path
 
 Because the path must be absolute, it always begins with a slash. The consequence is that
-most `file:` URLs beging with 3 slashes.
+most `file:` URLs begin with 3 slashes.
 
 When compiled for Windows the URL path will be converted to a Windows path. The convention
 is that backslashes become slashes and a first slash is added to make it absolute. So this
@@ -163,8 +160,8 @@ filesystem path. Example:
 Note that zip files require random file access and thus *must* be on the local file
 system. Consequently for remote zips the *entire* archive must be downloaded in order
 to access one entry. Thus, if you have a choice of compression technologies and want
-good remote support, zip should be avoid. In any case, for optimization exturl will
-make sure to download the zip only once per context.
+good remote support, zip should be avoided. In any case, exturl will optimize by
+making sure to download the zip only once per context.
 
 Uses [klauspost's compress library](https://github.com/klauspost/compress).
 
